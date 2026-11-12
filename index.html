@@ -63,7 +63,7 @@ body.pzp #vMain.lay2 .lvsd{padding-top:var(--pzth,64px)}   /* paused: the tabs o
 .pzatabs .nvi{display:none}   /* words only, larger */
 #pzaTabs button{font-size:calc(15px*var(--fs));letter-spacing:0;padding:8px 2px}
 .pzatabs button.want{color:var(--amber)}
-.pzatabs button.want{animation:pzWant 1s ease-in-out infinite alternate}   /* clicked before the take is read: opens when it is */
+   /* clicked before the take is read: opens when it is */
 @keyframes pzWant{from{opacity:1}to{opacity:.3}}
 .lvside:not(.pzr) #rsRail{display:none!important}
 #vMain.lay2 .lvside.pzr #rsRail{display:flex!important}   /* (the Record screen hides its own sidebar; this one is shown) */
@@ -380,6 +380,9 @@ body{
 #recClock{display:block;flex:0 0 100%;margin:0 0 14px;padding-left:17px}
 #recClock[hidden]{display:none}
 /* in the lanes box, at its top left, over the trace */
+#lvSpin{position:absolute;top:14px;left:14px;z-index:3;width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--amber);box-sizing:border-box;animation:lvSpin .8s linear infinite;pointer-events:none}
+#lvSpin[hidden]{display:none}
+@keyframes lvSpin{to{transform:rotate(360deg)}}
 #lvBox>#recClock{position:absolute;top:12px;right:14px;left:auto;z-index:3;margin:0;flex:none;pointer-events:none}
 /* The take's dot, just left of the clock: red and pulsing while recording,
    grey and still while paused. */
@@ -445,16 +448,26 @@ body{
 .tour .tspot{position:fixed;border-radius:10px;box-shadow:0 0 0 200vmax rgba(12,10,8,.62);outline:2px solid var(--amber);outline-offset:3px;pointer-events:none;transition:left .3s cubic-bezier(.4,0,.2,1),top .3s cubic-bezier(.4,0,.2,1),width .3s cubic-bezier(.4,0,.2,1),height .3s cubic-bezier(.4,0,.2,1)}
 .tour .tspot.none{outline-color:transparent}
 .tour .tcard{position:fixed;width:min(360px,calc(100vw - 32px));box-sizing:border-box;background:var(--bar);border:1px solid var(--line2);border-radius:var(--r);padding:16px 18px 14px;box-shadow:0 10px 36px rgba(0,0,0,.45);transition:left .3s cubic-bezier(.4,0,.2,1),top .3s cubic-bezier(.4,0,.2,1)}
-.tour .tn{font-size:calc(12px*var(--fs));letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
-.tour .tt{margin:4px 0 2px;font-size:calc(19px*var(--fs));color:var(--amber)}
-.tour .tp{margin:4px 0 14px;font-size:calc(16px*var(--fs));line-height:1.45;color:var(--ink)}
+.tour .tn{font-size:calc(13.5px*var(--fs));letter-spacing:.14em;text-transform:uppercase;color:var(--ink2)}
+.tour .tt{margin:4px 0 2px;font-size:calc(22px*var(--fs));color:var(--amber)}
+.tour .tp{margin:6px 0 16px;font-size:calc(18.5px*var(--fs));line-height:1.45;color:var(--ink)}
 .tour .tb{display:flex;gap:10px;justify-content:flex-end;align-items:center}
 .tour .tb .tx{margin-right:auto}
 @media (prefers-reduced-motion:reduce){.tour .tspot,.tour .tcard{transition:none}}
+html.novc .vcrow{display:none!important}   /* no voice commands on a phone */
 .setfoot{display:flex;justify-content:flex-start;padding:18px 0 8px}
 .tutb{display:inline-flex;align-items:center;gap:8px}
-.tutb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.btn.tutb .ray circle{fill:currentColor;stroke:none}
+.btn.tutb svg{width:24px;height:24px;margin:-3px 0;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.tour .tb .btn{display:inline-flex;align-items:center;gap:7px}
+.tour .tb .btn svg.tbi{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;margin:0}
 .tour .tcard .tnx:disabled{opacity:.45;cursor:default}
+.tour .tcard{width:min(400px,calc(100vw - 24px))}
+#ckMode button,.ckrs{display:inline-flex;align-items:center;justify-content:center;gap:9px}
+.cki{width:17px;height:17px;flex:none;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.tour .tdim{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+.tour .tdim path{fill:rgba(12,10,8,.62)}
+.tour .tspot{box-shadow:none}
 .setrow{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 0;border-bottom:1px solid var(--line)}
 .setrow:last-child{border-bottom:0}
 .setrow .setl{font-size:calc(21px*var(--fs))}
@@ -1584,6 +1597,8 @@ canvas{display:block;width:100%}
 /* the single steps, between those and the tempo: square, the sign drawn as
    on the drone's octave keys, as tall as the tens */
 .mtstep.mtone{width:41px;height:41px;min-width:0;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.mtrow .mtstep{height:46px;box-sizing:border-box;padding-top:0;padding-bottom:0;display:inline-flex;align-items:center;justify-content:center}
+.mtrow .mtstep.mtone{width:46px;height:46px}
 .mtone svg{width:16px;height:16px;stroke-width:1.6;stroke-linecap:butt}
 .mtunit{margin-top:10px}
 /* The metronome is read from across the room, so its labels run larger than
@@ -1912,7 +1927,7 @@ canvas{display:block;width:100%}
         </select>
       </div>
     </div>
-    <div class="setrow">
+    <div class="setrow vcrow">
       <div><span class="setl">Voice commands</span></div>
       <button type="button" class="tsw" id="vcSw" role="switch" aria-checked="true" aria-label="Voice commands" title="Say &quot;Sonoscope&quot; and then a command, such as &quot;Sonoscope, record&quot;"><i></i></button>
       <div class="vsel" id="vcSel" role="group" aria-label="Voice commands" hidden>
@@ -1937,7 +1952,7 @@ canvas{display:block;width:100%}
       </div>
     </div>
     <div class="setfoot">
-      <button type="button" class="btn tutb" id="tourGo"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5a4.5 4.5 0 0 0-2.6 8.2c.4.3.6.8.6 1.3v.5h4V11c0-.5.2-1 .6-1.3A4.5 4.5 0 0 0 8 1.5z"/><path d="M6 13.5h4M6.8 15h2.4"/></svg>Tutorial</button>
+      <button type="button" class="btn tutb" id="tourGo"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 5a4 4 0 0 0-2.4 7.2c.5.4.7.9.7 1.5v.6h3.4v-.6c0-.6.2-1.1.7-1.5A4 4 0 0 0 10 5z"/><path d="M8.4 16.3h3.2M8.9 18h2.2"/><path d="M8.3 8.3a1.9 1.9 0 0 1 1.5-1.4"/><g class="ray"><circle cx="10" cy="1.6" r=".95"/><circle cx="4.6" cy="3.6" r=".95"/><circle cx="15.4" cy="3.6" r=".95"/><circle cx="2.4" cy="8.8" r=".95"/><circle cx="17.6" cy="8.8" r=".95"/></g></svg>Tutorial</button>
     </div>
   </div>
 </dialog>
@@ -1977,7 +1992,7 @@ canvas{display:block;width:100%}
   </header>
   <div class="split">
     <div class="pane">
-      <div class="canvbox" id="lvBox">
+      <div class="canvbox" id="lvBox"><div id="lvSpin" role="status" aria-label="Reading the take" title="Reading the take" hidden></div>
         <canvas id="lvIdleFx" aria-hidden="true"></canvas>
         <div id="lvStaffBox"><svg id="lvStaffSvg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The notes as they are played, on a staff"></svg></div>
         <button type="button" class="lvfollow" id="lvFollow" hidden aria-label="Back to the newest notes" title="Back to the newest notes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.5"/><path d="M12 7v9.5M7.8 12.6l4.2 4.2 4.2-4.2"/></svg></button>
@@ -2392,8 +2407,8 @@ canvas{display:block;width:100%}
   </header>
   <div class="metro clock">
     <div class="vsel cksel" id="ckMode" role="group" aria-label="Clock">
-      <button type="button" data-v="sw" aria-pressed="true">Stopwatch</button>
-      <button type="button" data-v="tm" aria-pressed="false">Timer</button>
+      <button type="button" data-v="sw" aria-pressed="true"><svg class="cki" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="9.2" r="5.3"/><path d="M8 9.2V6.4M6.6 1.8h2.8M8 1.8v2.1M12.2 4.6l1-1"/></svg>Stopwatch</button>
+      <button type="button" data-v="tm" aria-pressed="false"><svg class="cki" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.8h8M4 14.2h8M5 1.8c0 3 3 4.2 3 6.2s-3 3.2-3 6.2M11 1.8c0 3-3 4.2-3 6.2s3 3.2 3 6.2"/></svg>Timer</button>
     </div>
     <!-- both panes in one place, as tall as the taller, so the buttons do not move between them -->
     <div class="ckpanes">
@@ -2405,7 +2420,7 @@ canvas{display:block;width:100%}
         <svg class="i-pause" viewBox="0 0 10 12" aria-hidden="true"><rect x="0" y="0" width="3.3" height="12"/><rect x="6.7" y="0" width="3.3" height="12"/></svg>
         <svg class="i-play" viewBox="0 0 10 12" aria-hidden="true"><path d="M0 0 L10 6 L0 12 Z"/></svg>
         </button>
-        <button class="btn" id="swReset">Reset</button>
+        <button class="btn ckrs" id="swReset"><svg class="cki" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.6 3.8"/><path d="M13.7 1.4v3.4h-3.4"/></svg>Reset</button>
       </div>
     </div>
     <!-- the timer: hours, minutes and seconds to set, then the time left -->
@@ -2422,7 +2437,7 @@ canvas{display:block;width:100%}
         <svg class="i-pause" viewBox="0 0 10 12" aria-hidden="true"><rect x="0" y="0" width="3.3" height="12"/><rect x="6.7" y="0" width="3.3" height="12"/></svg>
         <svg class="i-play" viewBox="0 0 10 12" aria-hidden="true"><path d="M0 0 L10 6 L0 12 Z"/></svg>
         </button>
-        <button class="btn" id="tmReset">Reset</button>
+        <button class="btn ckrs" id="tmReset"><svg class="cki" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.6 3.8"/><path d="M13.7 1.4v3.4h-3.4"/></svg>Reset</button>
       </div>
     </div>
     </div>
@@ -10316,7 +10331,7 @@ function pbTick(){
   PB.raf=requestAnimationFrame(pbTick);
 }
 /* The note under the playhead, lit on the staff. */
-function pbHead(){ if(window.LVP&&window.LVP.open){ lvPlayCur(); lvPlayRuler(); return; } staffCur(); rsLanes(); }
+function pbHead(){ if(window.LVP&&window.LVP.open){ lvPlayCur(); lvPlayRuler(); if($("lvBox").classList.contains("pzst")) staffCur(); return; } staffCur(); rsLanes(); }
 /* The take's pitch for the lanes: each note's own frames, so a note struck
    out goes from the lanes as well, and a double stop's second note level
    beside it. Built again only when the notes change. */
@@ -12634,6 +12649,7 @@ var LVP={open:false,saved:null,buf:null,home:null,tok:0,cur:null};
 function lvPlaySet(st){ const sv=$("lvStaffSvg"); if(sv) sv.classList.toggle("pz",st==="paused");
   document.body.classList.toggle("lvpz",st==="paused");   // no sidebar arrow while paused
   if(st==="paused"&&$("vMain").classList.contains("rail-full")) railFull(false);
+  if(st==="paused"){ PZA.gaveUp=false; }
   if(st==="paused"&&lay2On()){ lvPlayOpen(); pzaTabs(); return; }
   if(window.PZA&&curView==="vResults"&&(PZA.on||PZA.run)&&!PZA.final&&LVP.buf){
     setView("vMain"); pzaExit(st); pzaTabs();
@@ -12649,7 +12665,7 @@ function lvPlaySet(st){ const sv=$("lvStaffSvg"); if(sv) sv.classList.toggle("pz
    Analyze's own take comes back as it was; Analyze finishes the take as before. */
 var PZA={on:false,run:false,tok:0,snap:null,snapAt:0,snapRange:null,pbuf:null,buf:null};
 async function pzaStart(L,buf){
-  const tok=++PZA.tok;
+  const tok=++PZA.tok; PZA.gaveUp=false; lvSpinSet();
   for(let i=0;i<150&&PZA.run;i++) await new Promise(r=>setTimeout(r,100));   // the last one stopping
   if(tok!==PZA.tok) return;
   if(!L||!L.paused||PZA.run||PZA.final) return;
@@ -12667,12 +12683,12 @@ async function pzaStart(L,buf){
     await analyze(buf,true);
   }catch(err){ if(isCancel(err)) BZ_STOP=false; else window.pzaErr=String(err&&err.stack||err); }
   finally{ ANA_QUIET=false; PZA.run=false; }
-  if(tok!==PZA.tok||LV!==L||!L.paused||!S.notes||!S.notes.length) return;
+  if(tok!==PZA.tok||LV!==L||!L.paused||!S.notes||!S.notes.length){ if(tok===PZA.tok){ PZA.gaveUp=true; lvSpinSet(); } return; }
   pzaReady();
 }
 // the analysis done: its pages may be opened (the tabs say so); the screen stays as it is
 function pzaReady(){ PZA.buf=S.buf; PZA.on=true; PZA.pending=false; PZA.side=PZA.side||"full"; document.body.classList.add("pza"); pzaTabs(); pzaSum(); pbPaint();
-  { const w=PZA.want; PZA.want=null; if(w&&(w!=="rhy"||RG.ok)) pzaGo(w); else pzaTabs(); }
+  { const w=PZA.want; PZA.want=null; if(w&&(w!=="rhy"||RG.ok)) pzaGo(w); else{ pzaTabs(); if(PZA.side==="full") pzaStaff(!!RG.ok); } }
   if(!PZA.sumObs){ PZA.sumObs=new MutationObserver(pzaSum); PZA.sumObs.observe($("stMean"),{childList:true,characterData:true,subtree:true}); PZA.sumObs.observe($("stIn"),{childList:true,characterData:true,subtree:true}); } }
 // Intonation or Rhythm: Analyze's page for the paused take, the player taken there with it
 /* Rhythm: Analyze's staff (rhythm written out) over the staff's box; back home otherwise */
@@ -12695,9 +12711,9 @@ function pzaGo(page){
   if(!PZA.railHome){ PZA.railHome={p:rail.parentElement,n:rail.nextSibling}; }
   if(rail.parentElement!==side) side.appendChild(rail);
   PZA.side=page; side.classList.add("pzr");
-  anaPage(page); pzaStaff(page==="rhy"); pzaSum(); pzaTabs(); pzaRailFit();
+  anaPage(page); pzaStaff(!!RG.ok); pzaSum(); pzaTabs(); pzaRailFit();
 }// Playback: the staff's screen, the player under it again as it was
-function pzaFull(){ PZA.side="full"; pzaStaff(false); if(PZA.on){ try{ anaPage("int"); }catch(err){} pzaSum(); } const side=document.querySelector(".lvside"); if(side) side.classList.remove("pzr"); pzaTabs(); pzaRuler(); }
+function pzaFull(){ PZA.side="full"; if(PZA.on){ try{ anaPage("int"); }catch(err){} pzaSum(); } pzaStaff(!!(PZA.on&&RG.ok)); const side=document.querySelector(".lvside"); if(side) side.classList.remove("pzr"); pzaTabs(); pzaRuler(); }
 // paused: the column's contents under the tabs; the ruler drawn again for its new size (else it is stretched to fit)
 function pzaPad(on){ document.body.classList.toggle("pzp",!!on); pzaRuler(); }
 function pzaRuler(){ requestAnimationFrame(()=>{ if(LV&&curView==="vMain"){ try{ drawLive(); }catch(err){} } }); }
@@ -12724,7 +12740,9 @@ function lvPlayBack(){
 }
 /* The paused take's tabs - Playback, Intonation, Rhythm (when the take has one) - in the top bar of whichever screen it
    is on, in the same place; Intonation and Rhythm wait for the analysis */
+function lvSpinSet(){ const e=$("lvSpin"); if(e) e.hidden=!(LV&&LV.paused&&!PZA.on&&!PZA.final&&!PZA.gaveUp); }
 function pzaTabs(){
+  lvSpinSet();
   let t=$("pzaTabs");
   if(!t){
     t=document.createElement("div"); t.id="pzaTabs"; t.className="vsel rsnav pzatabs"; t.setAttribute("role","tablist"); t.setAttribute("aria-label","The paused take");
@@ -13141,7 +13159,7 @@ new MutationObserver(lvBtnHome).observe($("lvBox"),{attributes:true,attributeFil
     add.forEach(t=>{ try{ ss.insertRule(t,ss.cssRules.length); }catch(err){} });
   }
   { const side=document.createElement("aside"); side.className="lvside"; side.innerHTML='<div class="lvsl"><canvas id="lvNow"></canvas></div><div class="lvsd"><div class="lvr lvr1"><span class="c0"><i class="lvslot" data-id="lvNote"></i><span class="dsl">&thinsp;/&thinsp;</span><i class="lvslot" data-id="lvNote2"></i></span><div class="st"><span class="lbl">Vibrato rate</span><i class="lvslot" data-id="lvVib"></i></div><div class="st"><span class="lbl">Vibrato depth</span><i class="lvslot" data-id="lvDep"></i></div><div class="st"><span class="lbl">Dynamic</span><i class="lvslot" data-id="lvLvl"></i></div></div><div class="lvr lvr2"><span class="c0"></span><div class="st"><span class="lbl">Vibrato rate</span><i class="lvslot" data-id="lvVib2"></i></div><div class="st"><span class="lbl">Vibrato depth</span><i class="lvslot" data-id="lvDep2"></i></div><div class="st"><span class="lbl">Dynamic</span><i class="lvslot" data-id="lvLvl2"></i></div></div><div class="lvbtn"><div class="lvr lvsum"><div class="st"><span class="lbl">Mean<br>Off By</span><b class="num" id="lvMean">-</b></div><div class="st"><span class="lbl">Within<br>10 &cent;</span><b class="num" id="lvIn">-</b></div></div></div></div>'; $("lvBox").closest(".split").appendChild(side); }
-  lvBgWarm();     // the staff's note model built ahead, while idle
+  if(!window.VC_PHONE) lvBgWarm();     // the staff's note model built ahead, while idle (not on a phone)
   lvSlots(true);
   try{ localStorage.removeItem("sonoscope.liveDisplay"); localStorage.removeItem("sonoscope.liveDisplayV2"); }catch(err){}
   // the staff box: scrolling up stops it following; back at the end, or the arrow, and it follows again
@@ -13167,6 +13185,7 @@ new MutationObserver(lvBtnHome).observe($("lvBox"),{attributes:true,attributeFil
   const boxClick=$("lvBox").onclick;
   $("lvBox").onclick=e=>{
     if(e.target.closest("#lvFollow")) return;
+    if(e.target.closest("#staffSvg")) return;
     const bin=e.target.closest("#lvStaffSvg .sndel");
     if(bin){ lvNoteDel(bin.closest("[data-lk]")); return; }
     if(LV&&LV.paused&&e.target.closest("#lvStaffSvg .sn")){   // paused, among the notes: not a resume -
@@ -13791,7 +13810,11 @@ function vcStop(){
   const r=VC.rec; VC.rec=null; if(!r) return;
   try{ r.sp.disconnect(); r.rec.remove(); r.ctx.close(); }catch(err){}   // the microphone is the page's: left open for the take
 }
+// a phone or tablet: a touch screen as its only pointer
+var VC_PHONE=!!(window.matchMedia&&matchMedia("(pointer:coarse)").matches&&!matchMedia("(any-pointer:fine)").matches);
+if(VC_PHONE) document.documentElement.classList.add("novc");
 function vcSet(on){
+  if(VC_PHONE) on=false;   // the speech model too heavy for a phone: never loaded there
   VC.on=on;
   document.querySelectorAll("#vcSel button").forEach(b=>b.setAttribute("aria-pressed",String((b.dataset.v==="on")===on)));
   try{ localStorage.setItem(VC_KEY,on? "on" : "off"); }catch(err){}
@@ -13810,7 +13833,7 @@ function vcKeep(){
 }
 setInterval(vcKeep,2000);
 ["pointerdown","keydown"].forEach(t=>document.addEventListener(t,vcKeep,{capture:true}));
-{ let v=null; try{ v=localStorage.getItem(VC_KEY); }catch(err){} if(v!=="off") vcSet(true); }   // on unless switched off
+{ let v=null; try{ v=localStorage.getItem(VC_KEY); }catch(err){} if(v!=="off"&&!VC_PHONE) vcSet(true); }   // on unless switched off
 /* ---- The tutorial, from Settings: a sample take opened and read, its tabs clicked through, then the other tools -
    a short line each, only on what is not plain from the screen itself. A take already going is paused and used
    instead; the sample is put away at the end. ---- */
@@ -13841,23 +13864,23 @@ var TOUR={on:false,i:0,steps:[],from:null,el:null,demo:false};   // var: startLi
 const tourTab=v=>{ const t=$("pzaTabs"), b=t&&[...t.querySelectorAll("button")].find(x=>x.dataset.v===v&&!x.hidden); if(b) b.click(); };
 const tourPaused=()=>!!(window.PZA&&PZA.on&&LV&&LV.paused);
 function tourSteps(){
-  const take=tourPaused();
+  const take=tourPaused(), q=x=>document.querySelector(x);
   const T= take? [
-    {v:"vMain", go:()=>tourTab("full"), el:()=>$("lvBox"), t:"Notes", p:"Each note shows how many cents sharp (+) or flat (−) it was. Tap a note to play from it; its bin deletes it."},
-    {v:"vMain", el:()=>document.querySelector(".lvside .lvsl"), t:"Pitch ruler", p:"While you play: how far off you are right now. Playing back: what it showed at that moment."},
+    {v:"vMain", go:()=>tourTab("full"), el:()=>$("lvBox"), t:"Notes", p:"Each note shows how many cents sharp (+) or flat (−) it was. Click a note's trash icon to remove a false reading."},
     {v:"vMain", go:()=>tourTab("int"), el:()=>$("rsRail"), t:"Intonation", p:"Notes ranked by their average miss. Tap one to list every time you played it."},
-    {v:"vMain", go:()=>tourTab("rhy"), el:()=>$("rgTempo"), t:"Rhythm", p:"Tempo and meter are guessed. If either looks wrong, pick another and the staff is rewritten."},   // (passed by when the take has no steady beat)
+    {v:"vMain", go:()=>tourTab("rhy"), el:()=>$("rgTempo"), t:"Rhythm", p:"Tempo and meter are estimated. If either looks wrong, pick another and the staff is rewritten."},
     {v:"vMain", go:()=>tourTab("full"), el:()=>$("pbTune"), t:"Calibrate", p:"Hear the take with every note moved exactly in tune."},
-    {v:"vMain", el:()=>document.querySelector(".pbio"), t:"Save and open", p:"Export saves the take. Import it later to keep recording where it ended - or drop the file on the page."},
-    {v:"vMain", el:()=>document.querySelector(".lvside .lvbtn .rbtns")||document.querySelector(".lvside .lvbtn"), t:"Record and Restart", p:"Record carries on the same take. Restart throws it away."},
+    {v:"vMain", el:()=>q(".pbio"), t:"Save and open", p:"Export saves the take. Import it later to keep recording where it ended, or drag and drop the file on the page."},
   ] : [
     {v:"vMain", el:()=>$("rec"), t:"Record", p:"Pause any time: the take is read, and Record carries on from there."},
   ];
+  // a few of the drone's pitches (D6, F#6, A6: near enough its play button to be seen with it), each its own box
+  const drPick=()=>{ const b=[...$("drGrid").querySelectorAll("button")]; return [62,66,69].map(i=>b[i]).filter(Boolean); };
   T.push(
-    {v:"vMain", el:null, t:"Voice", p:"Say “Sonoscope” and a command: “Sonoscope, pause and start the metronome”."},
-    {v:"met", el:()=>$("mtPlay"), t:"Metronome", p:"Leave it on while you record: its clicks are taken out of the take."},
-    {v:"drn", el:()=>$("drPlay"), t:"Drone", p:"Pick several notes for a chord. It stops when you record, so it is not heard as your notes."},
-    {v:"clk", el:()=>$("ckMode"), t:"Clock", p:"Keeps running on other tabs; its tab's hands turn while it does."},
+    {v:"met", el:()=>[q("#vMet .mtrow"),$("mtTap")], t:"Metronome", p:"Type the tempo or tap it in."},
+    {v:"drn", el:()=>[...drPick(),$("drPlay")], t:"Drone", p:"Pick several notes for a chord. It stops when you record, so it is not heard as your notes."},
+    {v:"clk", el:()=>$("ckMode"), avoid:()=>[...document.querySelectorAll("#vClock .ckface,#vClock .ckset,#vClock .mtctl")].filter(e=>e.offsetParent), t:"Clock", p:"Keeps running on other tabs."},
+    ...(VC_PHONE? [] : [{v:"vMain", el:null, t:"Voice", p:"Say “Sonoscope” and a command: “Sonoscope, pause and start the metronome”."}]),
   );
   return T;
 }
@@ -13867,7 +13890,7 @@ function tourCard(i,n,t,p,last,wait){
   cd.querySelector(".tn").textContent= n? (i+1)+" of "+n : "";
   cd.querySelector(".tt").textContent=t; cd.querySelector(".tp").textContent=p;
   cd.querySelector(".tbk").disabled= i<=0||wait; cd.querySelector(".tnx").disabled=!!wait;
-  cd.querySelector(".tnx").textContent= last? "Done" : "Next";
+  cd.querySelector(".tnx").innerHTML= last? 'Done<svg class="tbi" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8"/></svg>' : 'Next<svg class="tbi" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>';
   return cd;
 }
 async function tourShow(i){
@@ -13879,33 +13902,46 @@ async function tourShow(i){
   if(curView!==was) await new Promise(r=>setTimeout(r,380));
   if(st.go){ st.go(); await new Promise(r=>setTimeout(r,450)); }
   if(!TOUR.on) return;
-  let el= st.el? st.el() : null, R= el&&el.getBoundingClientRect();
+  const list=()=>{ const e=st.el? st.el() : null; return (Array.isArray(e)? e : e? [e] : []).filter(Boolean); };
+  let els=list(); const ok=e=>{ const r=e.getBoundingClientRect(); return r.width>2&&r.height>2; };
   // nothing to show for it here: on past it, the way it was going
-  if(st.el&&!(R&&R.width>2&&R.height>2)){ tourShow(i+(i<TOUR.i? -1 : 1)); return; }
-  // out of sight (a phone's screen): brought in first
-  if(R&&(R.top<0||R.bottom>innerHeight)){ el.scrollIntoView({block:R.height>innerHeight*0.6? "start" : "center"}); await new Promise(r=>setTimeout(r,350)); R=el.getBoundingClientRect(); }
+  if(st.el&&!(els.length&&els.every(ok))){ tourShow(i+(i<TOUR.i? -1 : 1)); return; }
+  // out of sight (a phone's screen): all of them brought in together where they fit, else the first
+  if(els.length){ const rs=els.map(e=>e.getBoundingClientRect()), top=Math.min(...rs.map(r=>r.top)), bot=Math.max(...rs.map(r=>r.bottom));
+    if(top<8||bot>innerHeight-8){ if(bot-top<=innerHeight-24) window.scrollBy(0,top-(innerHeight-(bot-top))/2); else els[0].scrollIntoView({block:rs[0].height>innerHeight*0.6? "start" : "center"}); await new Promise(r=>setTimeout(r,350)); } }
   TOUR.i=i;
-  const d=TOUR.el, sp=d.querySelector(".tspot"), pad=8;
-  if(R){ sp.classList.remove("none"); Object.assign(sp.style,{left:(R.left-pad)+"px",top:(R.top-pad)+"px",width:(R.width+2*pad)+"px",height:(R.height+2*pad)+"px"}); }
-  else{ sp.classList.add("none"); Object.assign(sp.style,{left:"50%",top:"38%",width:"0px",height:"0px"}); }
   const cd=tourCard(i,T.length,st.t,st.p,i===T.length-1);
-  // the card: under what is lit, or over it, or beside; in the middle with nothing lit
-  const cw=cd.offsetWidth, ch=cd.offsetHeight, vw=innerWidth, vh=innerHeight;
-  let x, y;
-  if(!R){ x=(vw-cw)/2; y=vh*0.38; }
-  // something big (the staff): the card in its lower left corner, off the notes at its top
-  else if(R.height>vh*0.45&&R.height>ch+160){ x=R.left+16; y=Math.min(R.bottom,vh)-ch-16; }
-  else if(R.bottom+pad+14+ch<vh-12){ x=R.left+R.width/2-cw/2; y=R.bottom+pad+14; }
-  else if(R.top-pad-14-ch>12){ x=R.left+R.width/2-cw/2; y=R.top-pad-14-ch; }
-  else{ y=Math.min(vh-ch-12,Math.max(12,R.top+R.height/2-ch/2)); x= R.right+pad+14+cw<vw-12? R.right+pad+14 : Math.max(12,R.left-pad-14-cw); }
-  cd.style.left=Math.round(Math.min(vw-cw-12,Math.max(12,x)))+"px"; cd.style.top=Math.round(Math.min(vh-ch-12,Math.max(12,y)))+"px";
+  const vw=innerWidth, vh=innerHeight, pad=8, gap=14, m=6, cw=cd.offsetWidth, ch=cd.offsetHeight;
+  // the boxes, a little out from what they light, kept inside the screen
+  let B=els.map(e=>{ const r=e.getBoundingClientRect(); const x0=Math.max(m,r.left-pad), y0=Math.max(m,r.top-pad), x1=Math.min(vw-m,r.right+pad), y1=Math.min(vh-m,r.bottom+pad); return {x0,y0,x1,y1}; });
+  const keep=(st.avoid? st.avoid() : []).filter(Boolean).map(e=>{ const r=e.getBoundingClientRect(); return {x0:r.left-4,y0:r.top-4,x1:r.right+4,y1:r.bottom+4}; });
+  const hit=(c,r)=> c.x0<r.x1+gap&&c.x1>r.x0-gap&&c.y0<r.y1+gap&&c.y1>r.y0-gap;
+  const fits=c=> c.x0>=12&&c.y0>=12&&c.x1<=vw-12&&c.y1<=vh-12&&!B.concat(keep).some(r=>hit(c,r));
+  const at=(x,y)=>({x0:x,y0:y,x1:x+cw,y1:y+ch});
+  let C=null;
+  if(!B.length) C=at((vw-cw)/2,vh*0.38);
+  else{
+    const u={x0:Math.min(...B.map(b=>b.x0)),y0:Math.min(...B.map(b=>b.y0)),x1:Math.max(...B.map(b=>b.x1)),y1:Math.max(...B.map(b=>b.y1))}, cx=(u.x0+u.x1)/2-cw/2, cy=(u.y0+u.y1)/2-ch/2;
+    const cl=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+    const tries=[at(cl(cx,12,vw-cw-12),u.y1+gap), at(cl(cx,12,vw-cw-12),u.y0-gap-ch), at(u.x1+gap,cl(cy,12,vh-ch-12)), at(u.x0-gap-cw,cl(cy,12,vh-ch-12)),
+      at(cl(cx,12,vw-cw-12),vh-ch-12), at(cl(cx,12,vw-cw-12),12), at(12,vh-ch-12), at(vw-cw-12,vh-ch-12), at(12,12), at(vw-cw-12,12)];
+    C=tries.find(fits)||null;
+    // no room clear of them: the card at the foot of the screen, the boxes cut off above it
+    if(!C){ C=at(cl(cx,12,vw-cw-12),vh-ch-12); B=B.map(b=>({...b,y1:Math.min(b.y1,C.y0-gap)})).filter(b=>b.y1-b.y0>12); }
+  }
+  // the dimming, with a hole for each box; a lit outline round each
+  const d=TOUR.el, path=d.querySelector(".tdim path"), rr=(b,r)=>"M"+(b.x0+r)+" "+b.y0+"H"+(b.x1-r)+"Q"+b.x1+" "+b.y0+" "+b.x1+" "+(b.y0+r)+"V"+(b.y1-r)+"Q"+b.x1+" "+b.y1+" "+(b.x1-r)+" "+b.y1+"H"+(b.x0+r)+"Q"+b.x0+" "+b.y1+" "+b.x0+" "+(b.y1-r)+"V"+(b.y0+r)+"Q"+b.x0+" "+b.y0+" "+(b.x0+r)+" "+b.y0+"Z";
+  path.setAttribute("fill-rule","evenodd"); path.setAttribute("d","M0 0H"+vw+"V"+vh+"H0Z"+B.map(b=>rr(b,10)).join(""));
+  d.querySelectorAll(".tspot").forEach(e=>e.remove());
+  for(const b of B){ const sp=document.createElement("div"); sp.className="tspot"; Object.assign(sp.style,{left:(b.x0+3)+"px",top:(b.y0+3)+"px",width:(b.x1-b.x0-6)+"px",height:(b.y1-b.y0-6)+"px",transition:"none"}); d.insertBefore(sp,cd); }
+  cd.style.left=Math.round(C.x0)+"px"; cd.style.top=Math.round(C.y0)+"px";
   cd.querySelector(".tnx").focus();
 }
 async function tourStart(){
   if(TOUR.on) return;
   TOUR.on=true; TOUR.i=0; TOUR.from=curView; TOUR.demo=false;
   const d=document.createElement("div"); d.className="tour"; d.setAttribute("role","dialog"); d.setAttribute("aria-label","Tutorial");
-  d.innerHTML='<div class="tspot none"></div><div class="tcard"><div class="tn"></div><div class="tt"></div><div class="tp"></div><div class="tb"><button type="button" class="btn tx">Close</button><button type="button" class="btn tbk">Back</button><button type="button" class="btn gold tnx">Next</button></div></div>';
+  d.innerHTML='<svg class="tdim" aria-hidden="true"><path/></svg><div class="tcard"><div class="tn"></div><div class="tt"></div><div class="tp"></div><div class="tb"><button type="button" class="btn tx"><svg class="tbi" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>Close</button><button type="button" class="btn tbk"><svg class="tbi" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>Back</button><button type="button" class="btn gold tnx">Next<svg class="tbi" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button></div></div>';
   document.body.appendChild(d); TOUR.el=d;
   d.querySelector(".tx").onclick=tourEnd;
   d.querySelector(".tbk").onclick=()=>tourShow(TOUR.i-1);
@@ -13915,9 +13951,16 @@ async function tourStart(){
   // a take to show: the one going (paused), else the sample, opened and read
   const cd=tourCard(-1,0,"Tutorial","Opening a sample take...",false,true);
   Object.assign(cd.style,{left:Math.round((innerWidth-cd.offsetWidth)/2)+"px",top:Math.round(innerHeight*0.38)+"px"});
+  // everything going stopped and the take in hand dropped: the tutorial starts clean, on the sample
+  try{ if(MT.on) mtStop(); }catch(err){}
+  try{ if(DR.on) drStop(); }catch(err){}
+  try{ pbStop(); }catch(err){}
+  try{ $("swReset").click(); $("tmReset").click(); }catch(err){}
+  if(LV) stopLive(false);
+  TOUR.from="vMain";
   if(curView!=="vMain") setView("vMain");
-  if(LV&&!LV.paused) pauseLive();
-  else if(!LV){ TOUR.demo=true; try{ await startLive(demoTake()); }catch(err){} }
+  window.scrollTo(0,0);
+  TOUR.demo=true; try{ await startLive(demoTake()); }catch(err){}
   for(let k=0;k<400&&TOUR.on&&LV&&!(window.PZA&&PZA.on);k++) await new Promise(r=>setTimeout(r,100));
   // the staff written out in full first (its notes come in one by one)
   for(let k=0;k<60&&TOUR.on;k++){ const n=document.querySelectorAll("#lvStaffSvg [data-lk^='n']").length; if(n>=lvDrawn().length&&n>0) break; await new Promise(r=>setTimeout(r,100)); }
@@ -22880,7 +22923,7 @@ async function preWork(P,until,o){
   if(!P.yin.feed(x,P.safe,P.fin,until)) return true;
   // the models' first run builds their programs, holding the page up for a
   // second: not while a take is recorded - they wait for a pause or the end
-  if(!PRE_WARM&&P.L.mr.state==="recording"&&o.async) return false;
+  if(!PRE_WARM&&!window.VC_PHONE&&P.L.mr.state==="recording"&&o.async) return false;
   if(!await P.sf.feed(x,P.safe,P.fin,until,o)) return true;
   if(!await P.bp.feed(x,P.safe,P.fin,until)) return true;
   const G=P.sf.sofar(); if(G&&!P.rf.feed(x,P.safe,P.fin,until,P.yin,G)) return true;
@@ -23031,7 +23074,7 @@ const bpWarm=()=>{
     PRE_WARM=true;
   }).catch(()=>{});
 };
-setTimeout(()=>{ (window.requestIdleCallback||(f=>setTimeout(f,0)))(bpWarm,{timeout:4000}); },2500);
+if(!window.VC_PHONE) setTimeout(()=>{ (window.requestIdleCallback||(f=>setTimeout(f,0)))(bpWarm,{timeout:4000}); },2500);   // not on a phone: there it froze the page at open
 </script>
 <script type="text/plain" id="vosk-lib">/* vosk-browser 0.0.8 (Apache-2.0), patched for Sonoscope: model kept in memory, its bytes handed to the worker (works from a file) */
 (function (global, factory) {
