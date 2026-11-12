@@ -2605,12 +2605,25 @@ function setInstrument(key){
    open string it is played on, a semitone of slack for flat tuning, and the
    strings have to be neighbours. And the lower note can be no more than
    PAIR_REACH over the top string: up there a double stop is out of reach,
-   and an octave read on a C6 is a bright single note. Not the bass. */
+   and an octave read on a C6 is a bright single note. Not the bass.
+   And the hand has to span the two: over an open string the upper note can be
+   anything on the next string, but two stopped notes are at most a tenth apart
+   (PAIR_SPAN[0]), a thirteenth from an octave up the lower string (thumb
+   position, PAIR_SPAN[1]). The bass, tuned in fourths on a longer string,
+   spans less. */
 const PAIR_REACH=24;
+function pairSpan(){ return INSTR.manyPart? [16,21] : [12,16]; }
 function playable(lo,hi){
-  const o=INSTR.open;
+  const o=INSTR.open, L=Math.round(lo), H=Math.round(hi), sp=pairSpan();
   if(INSTR.manyPart&&lo>o[o.length-1]+PAIR_REACH) return false;
-  for(let s=0;s+1<o.length;s++) if(lo>=o[s]-1&&hi>=o[s+1]-1) return true;
+  // up high: the lower note an octave or more up the highest string pair it could be on
+  let top=-1; for(let s=0;s+1<o.length;s++) if(lo>=o[s]-1) top=s;
+  const span= top>=0&&L-o[top]>=12? sp[1] : sp[0];
+  for(let s=0;s+1<o.length;s++){
+    if(!(lo>=o[s]-1&&hi>=o[s+1]-1)) continue;
+    if(L<=o[s]&&L>=o[s]-1) return true;                      // the lower note the open string
+    if(H-L<=span) return true;
+  }
   return false;
 }
 const YIN_TH  = 0.15;
@@ -6398,6 +6411,8 @@ const MIC_RAW={echoCancellation:false,noiseSuppression:false,autoGainControl:fal
 let MIC=null, micWarn="";
 async function getMic(){
   if(MIC && MIC.getAudioTracks().some(t=>t.readyState==="live")) return MIC;
+  // no mic interface at all (an insecure page, an app's built-in browser, a locked-down browser): just "Microphone unavailable."
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)) throw new Error("");
   MIC=await navigator.mediaDevices.getUserMedia({audio:{...MIC_RAW,channelCount:1}});
   // Ask, don't assume: a browser can quietly keep a filter on. Try once more
   // to turn it off, and say so if it stays on.
@@ -8522,6 +8537,8 @@ async function analyze(buf,stay){
   // struck as by hand, so Undo brings it back
   // a slide is not notes: read on the trained model's track, which follows a slide
   if(S.notes&&S.sfa&&S.notes.length>1){ const G=S.sfa, ar=S.aref; const n0=S.notes.length; S.notes=glideOut(S.notes,(t0,t1)=>glSf(G,ar,t0,t1)); if(S.notes.length!==n0) noteRenum(); }
+  // a leap no hand makes, and a pair no hand stops (leapOut)
+  if(S.notes&&S.notes.length>1){ const N0=S.notes; S.notes=leapOut(N0); if(S.notes!==N0) noteRenum(); }
   // what was said to Sonoscope while recording: not notes
   if(S.liveSpeech&&S.liveSpeech.buf===buf&&S.notes&&S.liveSpeech.list.length){ S.notes=S.notes.filter(n=>!vcSaid(n,S.liveSpeech.list)); noteRenum(); }
   if(S.liveDel&&S.liveDel.buf===buf&&S.notes){
@@ -13063,7 +13080,50 @@ function glideOut(N,pitchAt){
   }
   return out;
 }
-function lvDrawn(){ return lvGlided(lvDrawn0()); }
+/* A leap no hand makes. A note bowed straight on from the one before is one the hand reaches where it is, or a string
+   crossing away; further than that it slides (heard as the slide) or stops while it shifts. So a split second that
+   jumps well away from the held notes either side of it, on the same side of both, and straight back, is a misreading -
+   an overtone, mostly - and so is a flash an octave, a twelfth or two octaves off the note it runs into. A pair no hand
+   can stop (playable) keeps the voice nearer the notes around it. Notes with nothing on one side are left as they are,
+   and a quick open string under its neighbours is a string crossing. */
+const LP_SHORT=0.12, LP_EDGE=0.07, LP_FAR=10, LP_GAP=0.08, LP_HELD=2;
+function leapOut(N){
+  if(!N||!N.length) return N;
+  const o=INSTR.open, isOpen=m=>o.includes(Math.round(m)), dur=n=>Math.max(0,n.t1-n.t0);
+  const near=(x,y)=> x&&y&&y.t0-x.t1<=LP_GAP, vs=n=> n.second? [n.target,n.second.midi] : [n.target];
+  const ovt=(m,h)=>{ const d=Math.round(m-h); return d===12||d===19||d===24||d===-12; };
+  const drop=new Set();
+  for(let i=0;i<N.length;i++){
+    const n=N[i], d=dur(n); if(n.second||d>LP_SHORT) continue;
+    const a= near(N[i-1],n)? N[i-1] : null, b= near(n,N[i+1])? N[i+1] : null;
+    if(a&&b&&dur(a)>=LP_HELD*d&&dur(b)>=LP_HELD*d){
+      const V=vs(a).concat(vs(b)), up=n.target-Math.max(...V), dn=Math.min(...V)-n.target;
+      if(up>=LP_FAR||(dn>=LP_FAR&&!isOpen(n.target))){ drop.add(i); continue; }
+    }
+    if(d<=LP_EDGE&&((b&&!b.second&&dur(b)>=3*d&&ovt(n.target,b.target))||(a&&!a.second&&dur(a)>=3*d&&ovt(n.target,a.target)))) drop.add(i);
+  }
+  let out= drop.size? N.filter((n,i)=>!drop.has(i)) : N, same=!drop.size;
+  // a pair out of reach: the voice closest to a note just before or after it (the top one when both are as close)
+  for(let i=0;i<out.length;i++){
+    const n=out[i]; if(!n.second||!isFinite(n.second.midi)) continue;
+    const lo=Math.min(n.target,n.second.midi), hi=Math.max(n.target,n.second.midi);
+    if(playable(lo,hi)) continue;
+    const ctx=[out[i-1],out[i+1]].filter(x=>x&&Math.abs(x.t1-n.t0)<1&&Math.abs(x.t0-n.t1)<1);
+    const cost=m=>Math.min(...ctx.flatMap(x=>vs(x).map(v=>Math.abs(v-m))));   // the nearer neighbour decides
+    const keepTop= !ctx.length||cost(hi)<=cost(lo), keep= keepTop? hi : lo;
+    if(same){ out=out.slice(); same=false; }
+    out[i]= keep===n.target? {...n,second:null,multi:false,pair:null}
+      : {...n,target:keep,cents:n.second.cents,name:noteName(keep),f:n.second.f,second:null,multi:false,pair:null};
+  }
+  return out;
+}
+var LPO={k:null,out:null};
+function lvDrawn(){
+  const N=lvGlided(lvDrawn0()); if(N.length<2) return N;
+  const k=N.length+"|"+(N[0].key||"")+"|"+(N[N.length-1].key||"")+"|"+LVS.bgRev+"|"+(LVS.fix? LVS.fixN : -1);
+  if(LPO.k===k&&LPO.out) return LPO.out;
+  LPO.k=k; LPO.out=leapOut(N); return LPO.out;
+}
 function lvDrawn0(){
   const N= LVS.fix? LVS.fix.concat(LVS.bg.slice(LVS.fixN)) : LVS.bg, sp=LV&&LV.speech;
   return (sp&&sp.length)||(window.VCS&&VCS.t0!=null)? N.filter(n=>!vcSaid(n,sp)&&!vcSaid(n,null)) : N;   // spoken to Sonoscope: not notes
