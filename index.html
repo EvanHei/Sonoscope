@@ -246,6 +246,7 @@ try{ if(localStorage.getItem("sonoscope.theme")==="light") document.documentElem
   font-display:block;
 }
 :root{
+  --tipwait:.6s;               /* how long the pointer rests before any tooltip shows (TIP_WAIT in the code) */
   --page:#1A1714;
   --app:#1A1714;
   --bar:#1E1A16;
@@ -380,9 +381,14 @@ body{
 #recClock{display:block;flex:0 0 100%;margin:0 0 14px;padding-left:17px}
 #recClock[hidden]{display:none}
 /* in the lanes box, at its top left, over the trace */
-#lvSpin{position:absolute;top:14px;left:14px;z-index:3;width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--amber);box-sizing:border-box;animation:lvSpin .8s linear infinite;pointer-events:none}
+/* reading the take: three grey dots in a row, each rising and settling in turn */
+#lvSpin{position:absolute;top:20px;left:16px;z-index:3;display:flex;gap:5px;pointer-events:none}
 #lvSpin[hidden]{display:none}
-@keyframes lvSpin{to{transform:rotate(360deg)}}
+#lvSpin i{width:6px;height:6px;border-radius:50%;background:var(--ink3);animation:lvDot 1.3s ease-in-out infinite}
+#lvSpin i:nth-child(2){animation-delay:.18s}
+#lvSpin i:nth-child(3){animation-delay:.36s}
+@keyframes lvDot{0%,50%,100%{transform:translateY(0)}25%{transform:translateY(-6px)}}
+@media (prefers-reduced-motion:reduce){#lvSpin i{animation:none}}
 #lvBox>#recClock{position:absolute;top:12px;right:14px;left:auto;z-index:3;margin:0;flex:none;pointer-events:none}
 /* The take's dot, just left of the clock: red and pulsing while recording,
    grey and still while paused. */
@@ -507,6 +513,12 @@ html.novc .vcrow{display:none!important}   /* no voice commands on a phone */
    does not shift sideways between a tab that scrolls and one that does not */
 html{scrollbar-gutter:stable}
 .hdgear{position:absolute;z-index:5;top:22px;right:21px}
+/* a newer version kept for next time: offered at the foot of the screen, over everything */
+#updNote{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:12px;
+  padding:8px 10px 8px 16px;background:var(--bar);border:1px solid var(--line2);border-radius:var(--r);box-shadow:0 4px 14px rgba(0,0,0,.3);
+  color:var(--ink);font-size:calc(15px*var(--fs));white-space:nowrap}
+#updNote[hidden]{display:none}
+#updNote .btn{padding:5px 12px}
 .app .bar{padding-right:79px}
 @media (max-width:900px){
   .hdgear{top:16px;right:9px}
@@ -531,7 +543,7 @@ html{scrollbar-gutter:stable}
   transform:translate(-50%,3px);padding:4px 9px;border-radius:4px;white-space:nowrap;pointer-events:none;
   background:var(--bar);border:1px solid var(--line2);color:var(--ink);font-size:calc(13.5px*var(--fs));line-height:1.3;
   box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;transition:opacity .12s,transform .12s}
-.ib[data-hint]:hover:not(:disabled)::after{opacity:1;transform:translate(-50%,0);transition-delay:.3s}
+.ib[data-hint]:hover:not(:disabled)::after{opacity:1;transform:translate(-50%,0);transition-delay:var(--tipwait)}
 .bar .ib[data-hint]::after{bottom:auto;top:calc(100% + 6px);transform:translate(-50%,-3px)}
 .bar .ib[data-hint]:hover:not(:disabled)::after{transform:translate(-50%,0)}
 @media (prefers-reduced-motion:reduce){.ib[data-hint]::after{transition:none}}
@@ -1153,11 +1165,11 @@ canvas{display:block;width:100%}
 .pbiob::after{content:attr(data-tip);position:absolute;right:0;bottom:calc(100% + 10px);z-index:30;width:max-content;
   padding:6px 10px;border-radius:4px;background:var(--bar);border:1px solid var(--line2);color:var(--ink);font-size:calc(13.5px*var(--fs));line-height:1.35;
   box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;pointer-events:none;transform:translateY(3px);transition:opacity .12s,transform .12s}
-.pbiob:hover::after{opacity:1;transform:none;transition-delay:.35s}
+.pbiob:hover::after{opacity:1;transform:none;transition-delay:var(--tipwait)}
 .pbtunew::after{content:attr(data-tip);position:absolute;right:0;bottom:calc(100% + 10px);z-index:30;width:max-content;max-width:260px;white-space:normal;
   padding:6px 10px;border-radius:4px;background:var(--bar);border:1px solid var(--line2);color:var(--ink);font-size:calc(13.5px*var(--fs));line-height:1.35;
   box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;pointer-events:none;transform:translateY(3px);transition:opacity .12s,transform .12s}
-.pbtunew:hover::after{opacity:1;transform:none;transition-delay:.35s}
+.pbtunew:hover::after{opacity:1;transform:none;transition-delay:var(--tipwait)}
 /* a sliding switch: an oval, a dot that moves across */
 .tsw{position:relative;flex:none;width:38px;height:22px;padding:0;border:1px solid var(--line2);border-radius:999px;background:var(--hov2);cursor:pointer;transition:background .18s,border-color .18s}
 .tsw i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink2);transition:transform .18s cubic-bezier(.4,0,.2,1),background .18s}
@@ -1668,6 +1680,7 @@ canvas{display:block;width:100%}
 .mtplay .i-play{margin-left:4px}
 .mtplay[aria-pressed="false"] .i-pause{display:none}
 .mtplay[aria-pressed="true"] .i-play{display:none}
+.mtplay.wait{opacity:.55}   /* Auto Pause waiting for the playing */
 /* Tap is pressed in time, over and over: a big target, and it answers on the
    way down rather than on release, so the beat it hears is the beat played. */
 .mttap{
@@ -1677,10 +1690,17 @@ canvas{display:block;width:100%}
 .mttap.hit{background:var(--hov);border-color:var(--amber-d);transition:none}
 /* Fits on one screen without scrolling: tighter spacing than the drone page,
    and Subdivision and Volume side by side rather than stacked. */
-#vMet .metro{padding:30px 30px 32px;min-height:0}
-#vMet .mtbeats{margin-bottom:20px}
+#vMet .metro{padding:14px 30px 70px;min-height:0}
+#vMet .mtbeats{margin-bottom:12px}
 #vMet .mtctl{margin-top:28px}
-.mtfoot{display:flex;align-items:stretch;justify-content:center;gap:44px;margin-top:32px}
+.mtctl{position:relative}
+#vMet .mtfoot>.mtsubw:has(#mtAuto){position:relative}
+#vMet .mtauto{position:absolute;top:100%;left:50%;translate:-50% 0;margin:32px 0 0;white-space:nowrap}
+#vMet .mtauto .pbtunel{font-size:calc(17px*var(--fs));letter-spacing:.16em;color:var(--ink-lbl);font-weight:500}   /* under Subdivision, the columns left as they were */
+@media (max-width:900px){#vMet .mtauto{position:static;translate:none;order:3;margin:18px 0 0}}
+#vMet .mtauto::after{right:auto;left:50%;transform:translate(-50%,3px)}
+#vMet .mtauto:hover::after{transform:translate(-50%,0)}
+.mtfoot{display:flex;align-items:stretch;justify-content:center;gap:44px;margin-top:18px}
 .mtfoot .mtsubw{margin-top:0}
 .mtfoot .mtsubw{justify-content:flex-end}   /* the labels under the controls, all on one line */
 .mtfoot .mtsubw>.mtlbl{order:2;margin-top:-12px}
@@ -1780,7 +1800,7 @@ canvas{display:block;width:100%}
 .tabs .ti .thm,.tabs .ti .thh{transform-origin:8px 8px}
 .tabs button[data-tab="ana"] .ti .tw1,.tabs button[data-tab="ana"] .ti .tw2{opacity:0}
 .tabs button.sounding .ti .tpend{animation:tSwing var(--mtbeat,1s) ease-in-out infinite alternate}
-@keyframes tSwing{from{transform:rotate(0)}to{transform:rotate(-52deg)}}
+@keyframes tSwing{from{transform:rotate(26deg)}to{transform:rotate(-26deg)}}   /* either side of upright */
 .tabs button.sounding .ti .tw1,.tabs button.recording .ti .tw1{animation:tWave 1.2s ease-out infinite}
 .tabs button.sounding .ti .tw2,.tabs button.recording .ti .tw2{animation:tWave 1.2s ease-out .3s infinite}
 @keyframes tWave{0%{opacity:.15}30%{opacity:1}100%{opacity:.15}}
@@ -1893,6 +1913,7 @@ canvas{display:block;width:100%}
 </style>
 </head>
 <body>
+<div id="updNote" role="status" hidden>New version <button type="button" class="btn gold" id="updGo">Reload</button><button type="button" class="btn bare" id="updNo" aria-label="Not now">&times;</button></div>
 <script>/* shown once the font is in, so the first drawing is the final one */ (function(){ var d=document.documentElement, show=function(){ d.classList.remove("fwait"); }; try{ Promise.all([document.fonts.load('400 16px "EB Garamond"'),document.fonts.load('600 16px "EB Garamond"')]).then(show,show); }catch(e){ show(); } })();</script>
 <dialog class="setdlg" id="setDlg" aria-labelledby="setTitle">
   <div class="sethd">
@@ -1983,7 +2004,7 @@ canvas{display:block;width:100%}
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
         <button role="tab" data-tab="ana" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
-        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5l3.4-7"/></svg>Metronome</button>
+        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
       </nav>
@@ -1992,7 +2013,7 @@ canvas{display:block;width:100%}
   </header>
   <div class="split">
     <div class="pane">
-      <div class="canvbox" id="lvBox"><div id="lvSpin" role="status" aria-label="Reading the take" title="Reading the take" hidden></div>
+      <div class="canvbox" id="lvBox"><div id="lvSpin" role="status" aria-label="Reading the take" title="Reading the take" hidden><i></i><i></i><i></i></div>
         <canvas id="lvIdleFx" aria-hidden="true"></canvas>
         <div id="lvStaffBox"><svg id="lvStaffSvg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The notes as they are played, on a staff"></svg></div>
         <button type="button" class="lvfollow" id="lvFollow" hidden aria-label="Back to the newest notes" title="Back to the newest notes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.5"/><path d="M12 7v9.5M7.8 12.6l4.2 4.2 4.2-4.2"/></svg></button>
@@ -2121,7 +2142,7 @@ canvas{display:block;width:100%}
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
         <button role="tab" data-tab="ana" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
-        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5l3.4-7"/></svg>Metronome</button>
+        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
       </nav>
@@ -2257,7 +2278,7 @@ canvas{display:block;width:100%}
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
         <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
-        <button role="tab" data-tab="met" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5l3.4-7"/></svg>Metronome</button>
+        <button role="tab" data-tab="met" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
       </nav>
@@ -2298,6 +2319,7 @@ canvas{display:block;width:100%}
           <div class="mtticks" id="mtTicks" aria-hidden="true"></div>
         </div>
       </div>
+      <div class="pbtunew mtauto" id="mtAuto" data-tip="Stops the metronome when you're not playing"><span class="pbtunel">Auto Pause</span><button type="button" class="tsw" role="switch" aria-checked="false" aria-label="Auto Pause"><i></i></button></div>
     </div>
     <div class="mtsubw mtvolw">
       <span class="lbl mtlbl">Volume</span>
@@ -2316,7 +2338,7 @@ canvas{display:block;width:100%}
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
         <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
-        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5l3.4-7"/></svg>Metronome</button>
+        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="rhy" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="4" cy="12.6" rx="2.2" ry="1.6"/><ellipse cx="11.6" cy="11.1" rx="2.2" ry="1.6"/><path d="M6.2 12.4V3.6l7.6-1.6v9"/><path d="M6.2 6.3l7.6-1.6"/></svg>Rhythm</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
@@ -2363,7 +2385,7 @@ canvas{display:block;width:100%}
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
         <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
-        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5l3.4-7"/></svg>Metronome</button>
+        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
       </nav>
@@ -2398,7 +2420,7 @@ canvas{display:block;width:100%}
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
         <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
-        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5l3.4-7"/></svg>Metronome</button>
+        <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
       </nav>
@@ -5987,20 +6009,86 @@ function mtFlush(from){
   MT.q=keep;
 }
 function mtPump(){
-  const now=ac().currentTime, spb=60/mtBpm(), n=MT.sub;
+  const now=ac().currentTime, spb=60/mtBpm(), n=MT.sub, quiet=mtaQuiet(now);
   for(;;){
     const t=MT.beat+MT.idx*spb/n;
-    if(t<now){ MT.beat=now+0.03; MT.idx=0; continue; }       // after a stall
-    if(t>=now+MT_AHEAD) break;
-    mtClick(t, MT.idx>0? 0 : MT.bar>1&&mtInBar(MT.bi)===0? 2 : 1, MT.bi);
+    if(t<now&&!(quiet&&now-t<2)){ MT.beat=now+0.03; MT.idx=0; continue; }       // after a stall
+    if(t>=now+(quiet? 0.03 : MT_AHEAD)) break;
+    if(!quiet) mtClick(t, MT.idx>0? 0 : MT.bar>1&&mtInBar(MT.bi)===0? 2 : 1, MT.bi);
     if(++MT.idx>=n){ MT.idx=0; MT.beat+=spb; MT.bi++; }
   }
 }
+/* Auto Pause: the clicks only while something is being played. The mic is heard from 60 to 880 Hz, where the
+   click has nothing (its lowest partial is 937 Hz) and a bowed note has its body, so the metronome never hears
+   itself. Against the room's own level: in at 12 dB over it, held while within 6 dB of that, and out after a
+   second and a half (or two beats) with nothing. Started, it waits for the first note. */
+const MT_AUTO_KEY="ma.metronome.auto", MTA_LO=60, MTA_HI=880, MTA_IN=7, MTA_HOLD=4, MTA_MIN=-72, MTA_ROOM=80;
+const MTA={on:false, open:false, last:-1e9, floor:NaN, room:[], hit:0, src:null, an:null, buf:null, stream:null, wiring:false};
+function mtaQuiet(now){
+  if(!MTA.on||!MT.on) return false;
+  const A=MTA;
+  if(!A.an||A.stream!==MIC||!MIC||!MIC.getAudioTracks().some(t=>t.readyState==="live")){ mtaWire(); return !A.open; }
+  A.an.getFloatFrequencyData(A.buf);
+  const hz=ac().sampleRate/A.an.fftSize;
+  let p=0; for(let k=Math.ceil(MTA_LO/hz);k<=Math.floor(MTA_HI/hz);k++) p+=Math.pow(10,A.buf[k]/10);
+  const db=10*Math.log10(p+1e-20);
+  // the room: learnt only while waiting, from readings that are not themselves a start of playing; its level
+  // (A.floor) the one 9 readings in 10 of the last two seconds stay under. Not ready until it has heard a little.
+  const loud= isFinite(A.floor)? db>A.floor+MTA_IN : db>MTA_MIN+14;
+  if(!A.open&&db>-120&&!loud){
+    A.room.push(db); if(A.room.length>MTA_ROOM) A.room.shift();
+    if(A.room.length>=8){ const r=A.room.slice().sort((a,b)=>a-b); A.floor=r[Math.floor(0.9*(r.length-1))]; }
+  }
+  if(!A.open){
+    A.hit= loud&&db>MTA_MIN? A.hit+1 : 0;
+    if(A.hit>=2){ A.open=true; A.last=now; mtaPaint(); }
+  }else{
+    if((isFinite(A.floor)? db>A.floor+MTA_HOLD : db>MTA_MIN+8)&&db>MTA_MIN-6) A.last=now;
+    if(now-A.last>Math.max(1.5,2*60/mtBpm())){ A.open=false; A.hit=0; mtFlush(now+0.005); mtaPaint(); }
+  }
+  return !A.open;
+}
+async function mtaWire(){
+  const A=MTA; if(A.wiring) return; A.wiring=true;
+  try{
+    const m=await getMic(), c=ac();
+    mtaUnwire(true);
+    if(!(MTA.on&&MT.on)) return;
+    A.src=c.createMediaStreamSource(m); A.an=c.createAnalyser();
+    A.an.fftSize=2048; A.an.smoothingTimeConstant=0;
+    A.src.connect(A.an); A.buf=new Float32Array(A.an.frequencyBinCount); A.stream=m;
+  }catch(err){
+    // no mic: the plain metronome, and the switch says why
+    mtAutoSet(false); $("mtAuto").dataset.tip="Needs the microphone";
+  }finally{ A.wiring=false; }
+}
+function mtaUnwire(keepMic){
+  const A=MTA;
+  try{ if(A.src) A.src.disconnect(); }catch(err){}
+  A.src=A.an=A.buf=A.stream=null; A.floor=NaN; A.room=[]; A.hit=0;
+  if(!keepMic&&!LV&&!(typeof VC!=="undefined"&&VC.on)) releaseMic();
+}
+function mtaPaint(){ $("mtPlay").classList.toggle("wait",MTA.on&&MT.on&&!MTA.open); }
+function mtAutoSet(on){
+  MTA.on=!!on;
+  const w=$("mtAuto"); w.querySelector(".tsw").setAttribute("aria-checked",MTA.on?"true":"false");
+  w.dataset.tip="Stops the metronome when you're not playing";
+  try{ localStorage.setItem(MT_AUTO_KEY,MTA.on?"1":"0"); }catch(err){}
+  if(MT.on){
+    if(MTA.on){ MTA.open=false; MTA.hit=0; mtFlush(ac().currentTime+0.005); mtaWire(); }   // at once: quiet until playing is heard
+    else{ mtaUnwire(); MTA.open=false; }
+  }
+  mtaPaint();
+}
+$("mtAuto").querySelector(".tsw").addEventListener("click",()=>mtAutoSet(!MTA.on));
+$("mtAuto").querySelector(".pbtunel").addEventListener("click",()=>mtAutoSet(!MTA.on));
+try{ if(localStorage.getItem(MT_AUTO_KEY)==="1") mtAutoSet(true); }catch(err){}
 async function mtStart(){
   const c=ac();
   if(c.state==="suspended") await c.resume();
   MT.on=true;
   MT.beat=c.currentTime+0.06; MT.idx=0; MT.bi=0; MT.barNew=false;
+  if(MTA.on){ MTA.open=false; MTA.hit=0; mtaWire(); }
   mtPump();
   clearInterval(MT.timer); MT.timer=setInterval(mtPump,25);
   cancelAnimationFrame(MT.raf); MT.raf=requestAnimationFrame(mtFrame);
@@ -6013,6 +6101,7 @@ function mtStop(){
   cancelAnimationFrame(MT.raf); MT.raf=0;
   mtFlush(ac().currentTime);
   mtLight(-1);
+  if(MTA.on){ mtaUnwire(); MTA.open=false; }
   mtPaint();
 }
 /* A new tempo or subdivision takes over at the very next click rather than at
@@ -6064,6 +6153,7 @@ function mtPaint(){
   b.setAttribute("aria-pressed",MT.on?"true":"false");
   b.setAttribute("aria-label",MT.on?"Stop metronome":"Start metronome");
   tabSounding("met",MT.on);
+  if(typeof mtaPaint==="function") mtaPaint();
 }
 function mtToggle(){ MT.on? mtStop() : mtStart(); }
 
@@ -6096,6 +6186,31 @@ function mtTap(){
    in the box that matches a preset lights that preset. */
 /* The slider's stops. 0 is no subdivision - just the beat - which the
    scheduler counts as one click per beat. */
+/* A slider with stops that still slides: the thumb follows the finger rather than jumping stop to stop, the value
+   is the nearest stop (cb hears each new one), and on letting go - or an arrow key - the thumb glides onto it. */
+function smoothRange(r,cb){
+  const mn=+r.min||0, mx=+r.max, idx=()=>Math.min(mx,Math.max(mn,Math.round(+r.value)));
+  let last=idx(); r.step="any";
+  const fire=()=>{ const i=idx(); if(i!==last){ last=i; cb(i); } };
+  r.addEventListener("pointerdown",()=>{ r._drag=true; last=idx(); });
+  r.addEventListener("input",fire);
+  r.addEventListener("change",()=>{ r._drag=false; fire(); rangeGlide(r,idx()); });
+  r.addEventListener("keydown",e=>{
+    const d={ArrowRight:1,ArrowUp:1,ArrowLeft:-1,ArrowDown:-1}[e.key]; if(!d) return;
+    e.preventDefault();
+    const from=+r.value, to=Math.min(mx,Math.max(mn,idx()+d));
+    if(to!==last){ last=to; cb(to); }
+    r.value=String(from); rangeGlide(r,to);
+  });
+}
+function rangeGlide(r,to){
+  cancelAnimationFrame(r._gl||0);
+  const from=+r.value, t0=performance.now(); if(from===to) return;
+  const f=now=>{ const k=Math.min(1,(now-t0)/150), e=1-Math.pow(1-k,3); r.value=String(from+(to-from)*e); if(k<1) r._gl=requestAnimationFrame(f); };
+  r._gl=requestAnimationFrame(f);
+}
+/* Setting a smooth slider from elsewhere: left alone while the finger is on it at that stop. */
+function rangeTo(r,v){ if(r._drag&&Math.round(+r.value)===v) return; cancelAnimationFrame(r._gl||0); r.value=String(v); }
 const MT_STOPS=[1,2,3,4,6,8];
 const subLabel=n=> n<=1? 0 : n;
 function mtSetSub(v){
@@ -6105,7 +6220,7 @@ function mtSetSub(v){
   const k=MT_STOPS.indexOf(n), r=$("mtSubR");
   // off the stops, the thumb rests on the nearest one below and goes faint
   let near=0; for(let i=0;i<MT_STOPS.length;i++) if(MT_STOPS[i]<=n) near=i;
-  r.value=String(k>=0? k : near);
+  rangeTo(r,k>=0? k : near);
   r.classList.toggle("free",k<0);
   r.setAttribute("aria-valuetext", n<=1? "None" : n+" per beat");
   document.querySelectorAll("#mtTicks .mttick").forEach((t,i)=>t.classList.toggle("on",i===k));
@@ -6117,7 +6232,7 @@ function mtSetSub(v){
   box.innerHTML=MT_STOPS.map((v,i)=>
     `<span class="mttick" style="--i:${i};--n:${n}"><i></i><b>${subLabel(v)}</b></span>`).join("");
 })();
-$("mtSubR").addEventListener("input",()=>mtSetSub(MT_STOPS[+$("mtSubR").value]));
+smoothRange($("mtSubR"),i=>mtSetSub(MT_STOPS[i]));
 
 /* Beats per bar, on a slider like the subdivision's. Off counts no bar:
    every beat alike, one light. A change while the beat runs makes the next
@@ -6127,7 +6242,7 @@ function mtSetBar(v){
   const n= MT_BARS.includes(v)? v : 1, was=MT.bar;
   MT.bar=n;
   const r=$("mtBarR");
-  r.value=String(MT_BARS.indexOf(n));
+  rangeTo(r,MT_BARS.indexOf(n));
   r.setAttribute("aria-valuetext", n<=1? "Off" : n+" beats per bar");
   document.querySelectorAll("#mtBarTicks .mttick").forEach((t,i)=>t.classList.toggle("on",MT_BARS[i]===n));
   $("mtBeat").innerHTML=MT_BARS.slice(0,n).map((_,i)=>`<i${n>1&&i===0?' class="one"':""}></i>`).join("");
@@ -6140,7 +6255,7 @@ function mtSetBar(v){
   box.innerHTML=MT_BARS.map((v,i)=>
     `<span class="mttick" style="--i:${i};--n:${n}"><i></i><b>${v<=1? "off" : v}</b></span>`).join("");
 })();
-$("mtBarR").addEventListener("input",()=>mtSetBar(MT_BARS[+$("mtBarR").value]));
+smoothRange($("mtBarR"),i=>mtSetBar(MT_BARS[i]));
 $("mtSubN").addEventListener("input",()=>{
   const v=parseFloat($("mtSubN").value);
   if(v>=0 && v<=MT_SUB_MAX && v===Math.round(v)) mtSetSub(v);   // half-typed numbers wait
@@ -6443,7 +6558,7 @@ function newRecorder(stream){
 function releaseMic(){
   if(MIC){ MIC.getTracks().forEach(t=>t.stop()); MIC=null; }
 }
-document.addEventListener("visibilitychange",()=>{ if(document.hidden && !LV && !(typeof VC!=="undefined"&&VC.on)) releaseMic(); });   // kept while voice commands listen
+document.addEventListener("visibilitychange",()=>{ if(document.hidden && !LV && !(typeof VC!=="undefined"&&VC.on) && !(MT.on&&MTA.on)) releaseMic(); });   // kept while voice commands listen
 
 let starting=false;
 async function startLive(seed){
@@ -6490,7 +6605,7 @@ async function startLive(seed){
   say(micWarn,!!micWarn);
 
   setRec("run");
-  LV.timer=setInterval(liveFrame,1000/LV_HZ);
+  LV.timer=setInterval(liveFrameRec,1000/LV_HZ);
   LV.raf=requestAnimationFrame(liveLoop);
   sfStart(ctx,src);
   // the analysis starts at once, in the background
@@ -6557,7 +6672,7 @@ function resumeLive(){
   LV.paused=0;
   try{ if(LV.mr&&LV.mr.state==="paused") LV.mr.resume(); }catch(err){}
   setPaused(false);
-  LV.timer=setInterval(liveFrame,1000/LV_HZ);
+  LV.timer=setInterval(liveFrameRec,1000/LV_HZ);
   LV.raf=requestAnimationFrame(liveLoop);
 }
 /* "idle" | "run" | "paused". Everything that tells the three apart is set from
@@ -7488,6 +7603,34 @@ function sfNote(hz,conf,at){
 function sfStop(){
   if(LV&&LV.sfNode){ try{ LV.sfNode.disconnect(); LV.sfMute.disconnect(); }catch(err){} }
   if(SFW) SFW.postMessage({stop:1});
+}
+/* Each frame's readings kept with that frame's reading in LV.hall, so the paused take played back shows them as they
+   were (lvPlayRead) */
+const LV_READ_IDS=["lvNote","lvHz","lvVib","lvDep","lvLvl"].flatMap(k=>[k,k+"2"]);
+function liveFrameRec(){
+  const A=LV&&LV.hall, n0=A? A.length : 0;
+  liveFrame();
+  const B=LV&&LV.hall; if(!B||B.length===n0||!B.length) return;
+  const h=B[B.length-1];
+  h.rd={ds:$("dsOn").checked, el:LV_READ_IDS.map(id=>{ const e=$(id); return e? [e.textContent,e.className] : null; })};
+}
+function lvPlayRead(){
+  const A=LV&&LV.hall; if(!A||!A.length||!(PB.on||PB.at>0)) return;
+  const t=pbPos();
+  let lo=0, hi=A.length; while(lo<hi){ const m=(lo+hi)>>1; if(A[m].t<=t) lo=m+1; else hi=m; }
+  let i=lo-1; while(i>=0&&lo-i<8&&!A[i].rd) i--;
+  const h=i>=0&&A[i]; if(!h||!h.rd) return;
+  const N= $("lvBox").classList.contains("pzst")&&S.notes? S.notes : lvDrawn(), n=N.find(n=>t>=n.t0&&t<n.t1)||null;
+  if(LVP.rd===h&&LVP.rn===n) return;
+  LVP.rd=h; LVP.rn=n;
+  if(h.rd.ds!==$("dsOn").checked){ $("dsOn").checked=h.rd.ds; try{ setDsView(); }catch(err){} }
+  LV_READ_IDS.forEach((id,k)=>{ const v=h.rd.el[k], e=$(id); if(!v||!e) return; if(e.textContent!==v[0]) e.textContent=v[0]; if(e.className!==v[1]) e.className=v[1]; });
+  if(!n) return;
+  const ar=+$("aref").value||440, put=(sfx,m,c)=>{ const e=$("lvNote"+sfx); e.textContent=liveName(m); e.classList.remove("tent"); noteCol(e,c);
+    $("lvHz"+sfx).textContent=(ar*Math.pow(2,(m-69)/12+(isFinite(c)? c : 0)/1200)).toFixed(1)+" Hz"; };
+  const sec= n.second&&isFinite(n.second.midi)? n.second : null;
+  if(sec&&$("dsOn").checked){ const up=sec.midi>n.target; put("", up? sec.midi : n.target, up? sec.cents : n.cents); put("2", up? n.target : sec.midi, up? n.cents : sec.cents); }
+  else put("", n.target, n.cents);
 }
 function liveFrame(){
   if(!LV) return;
@@ -8544,7 +8687,13 @@ async function analyze(buf,stay){
   if(S.liveDel) S.liveDel.done=0;
   liveStrike(buf);
   undoPaint();
-  pbReset();
+  // the paused take, read quietly while it is in the player: whatever is being listened to goes on where it is, the
+  // note under the playhead the one picked. Any other take starts from its beginning.
+  if(stay&&typeof LVP!=="undefined"&&LVP.buf===buf){
+    const t=pbPos(), N=S.notes||[], k=N.findIndex(n=>t<n.t1);
+    if(PB.at>0||PB.on) S.rk= k>=0? k : N.length-1;
+    $("pbSeek").max=String(Math.max(0.01,S.dur||0.01)); pbPaint();
+  }else pbReset();
   ANA.fresh=true;
   renderResults();
   await busyEnd();
@@ -9684,7 +9833,7 @@ function bandFill(c){ return isFinite(c)? "rgb("+CBAND[centsBand(c)].rgb+")" : "
 /* On the Rhythm page the staff's notes are coloured and numbered by how early
    or late each started, in milliseconds (h.ms, set by drawStaff); elsewhere
    by cents. The five colours as for cents, at 15, 30, 50 and 80 ms. */
-let ST_RHY=false;
+let ST_RHY=false, ST_SC=1;   // ST_SC: the staff's drawn scale (under 1 in the paused staff's place)
 function msFill(ms){ return isFinite(ms)? "rgb("+CBAND[rBand(ms)].rgb+")" : "var(--ink3)"; }
 function stFill(h){ return ST_RHY? msFill(h.ms) : bandFill(h.cents); }
 /* How wide a staff cents number is drawn, for hanging its sign beside it. */
@@ -9856,7 +10005,10 @@ function stRow(k,smooth){
 function drawStaff(){
   const box=$("staffBox"), svg=$("staffSvg");
   if(!box||box.hidden||!S.notes) return;
-  const W=box.clientWidth;
+  // in the paused staff's place: drawn at that staff's size (lvStaffDraw's 0.88), so finishing the reading changes nothing
+  const SC= box.parentElement===$("lvBox")? 0.88 : 1;
+  ST_SC=SC;
+  const W=box.clientWidth/SC;
   if(W<120) return;
   if(!S.staff) S.staff=staffModel(S.notes);
   const ev=stEv();
@@ -10013,13 +10165,13 @@ function drawStaff(){
   // Every line given the height of the tallest, centred in it, so the box -
   // one line high - shows exactly one line at each stop.
   const LH=Math.ceil(Math.max(...rowsO.map(r=>r.y1-r.y0)));
-  S.stRows=rowsO.map((r,i)=>({top:i*LH,a:r.a+ST_OFF,b:r.b+ST_OFF}));
+  S.stRows=rowsO.map((r,i)=>({top:i*LH*SC,a:r.a+ST_OFF,b:r.b+ST_OFF}));
   out=rowsO.map((r,i)=>`<g transform="translate(0 ${f1(i*LH+(LH-(r.y1-r.y0))/2-r.y0)})">${r.s}</g>`).join("");
   // one line on Full Take, under the lanes; elsewhere the staff fills their room
   box.style.height= ANA.page==="take"? (LH+2)+"px" : "";
   const H=LH*rowsO.length;
   svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
-  svg.setAttribute("height",String(H));
+  svg.setAttribute("height",String(H*SC));
   svg.innerHTML=out;
   stPauseMarks(svg);
   staffCur();
@@ -10343,7 +10495,7 @@ function pbTick(){
   PB.raf=requestAnimationFrame(pbTick);
 }
 /* The note under the playhead, lit on the staff. */
-function pbHead(){ if(window.LVP&&window.LVP.open){ lvPlayCur(); lvPlayRuler(); if($("lvBox").classList.contains("pzst")) staffCur(); return; } staffCur(); rsLanes(); }
+function pbHead(){ if(window.LVP&&window.LVP.open){ lvPlayCur(); lvPlayRuler(); lvPlayRead(); if($("lvBox").classList.contains("pzst")) staffCur(); return; } staffCur(); rsLanes(); }
 /* The take's pitch for the lanes: each note's own frames, so a note struck
    out goes from the lanes as well, and a double stop's second note level
    beside it. Built again only when the notes change. */
@@ -12416,12 +12568,14 @@ noteUndo=()=>{ if(ANA.page==='int'||ANA.page==='rhy') noteUndo0(); };
     tip.style.top=y+"px";
     tip.classList.add("on");
   }
-  function hide(el){ if(!el||cur===el){ tip.classList.remove("on"); cur=null; } }
+  const TIP_WAIT=600;   // as --tipwait: the same wait as every other tooltip
+  let tmr=0;
+  function hide(el){ if(!el||cur===el||!cur){ clearTimeout(tmr); tip.classList.remove("on"); cur=null; } }
   document.querySelectorAll(".ii[data-tip]").forEach(el=>{
     el.tabIndex=0;
     el.setAttribute("role","img");
     el.setAttribute("aria-label",el.dataset.tip);
-    el.addEventListener("mouseenter",()=>show(el));
+    el.addEventListener("mouseenter",()=>{ clearTimeout(tmr); tmr=setTimeout(()=>show(el),TIP_WAIT); });
     el.addEventListener("mouseleave",()=>hide(el));
     el.addEventListener("focus",()=>show(el));
     el.addEventListener("blur",()=>hide(el));
@@ -12879,6 +13033,25 @@ function pzaExit(st){
     if(S.notes&&S.buf) renderResults(); else pbPaint();
   }
   PZA.buf=null; PZA.pbuf=null;
+}
+/* Paused, Analyze's staff in the staff's place: moving to Rhythm writes the rhythms in (bar lines, stems, beams -
+   the notes spread out), and away takes them out. Rather than jump, the staff fades out as it was and fades in as
+   it is now. Any other redraw is as before. */
+{ const d1=drawStaff; let was=null, busy=false;
+  const XF=180, reduce=()=>matchMedia("(prefers-reduced-motion: reduce)").matches;
+  drawStaff=function(){
+    const box=$("staffBox"), svg=$("staffSvg"), inLv=!!(box&&box.parentElement===$("lvBox"));
+    if(!inLv){ was=null; return d1.apply(this,arguments); }
+    const key= (RG.ok&&window.PZA&&PZA.side==="rhy")+"|"+(ANA.page==="rhy"&&RG.ok);
+    if(busy){ was=key; return; }                                  // the fade's own draw will show it as it is then
+    if(was!==null&&key!==was&&svg.childElementCount&&!reduce()){
+      was=key; busy=true;
+      svg.style.transition="opacity "+XF+"ms ease"; svg.style.opacity="0";
+      setTimeout(()=>{ busy=false; was=null; drawStaff(); svg.style.opacity="1"; setTimeout(()=>{ svg.style.transition=""; },XF+20); },XF+10);
+      return;
+    }
+    was=key; return d1.apply(this,arguments);
+  };
 }
 function lvPlaySlot(){
   let el=$("lvPlay");
@@ -13658,6 +13831,13 @@ function vcPhrases(){
   return VC_PHRASES;
 }
 window.vcPhrases=vcPhrases;
+/* ---- Opening at once: sw.js keeps a copy of the page (only on a real web address) ---- */
+if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){
+  navigator.serviceWorker.addEventListener("message",e=>{ if(e.data&&e.data.type==="sonoscope-updated") $("updNote").hidden=false; });
+  addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+}
+$("updGo").onclick=()=>location.reload();
+$("updNo").onclick=()=>{ $("updNote").hidden=true; };
 /* ---- Voice: the rest of the page's controls ----
    Every general button and setting has commands, said the ways people say them: each line below is a set of
    phrasings - (a|b) one of, [a] or nothing - all given to the recogniser, so it can hear only those. A command
@@ -13783,6 +13963,9 @@ const VC_UI=[
   [[VC_GO_T("playback|play back|full take|whole take|staff|live staff"),"(playback|play back) (tab|page)","(full|whole) take [tab|page]"], ()=> window.PZA&&LV&&LV.paused? ()=>pzaFull() : null],
   [["calibrate","calibrate (on|it)","(turn on|switch on|use) (calibrate|calibration)","calibrated","[play [it]] in tune","(turn on|switch on|use) in tune","in tune on","tune it","(fix|correct) the (tuning|pitch|intonation)","make it in tune","(play|let me hear) it in tune","how it should sound"], ()=> vcOnRes()||(window.PZA&&PZA.on&&LV&&LV.paused)? ()=>pbTuneSet(true) : null],
   [["[play it] as (played|recorded)","(turn off|switch off) in tune","calibrate off","(turn off|switch off|stop) (calibrate|calibration|calibrating)","in tune off","(the|back to the) original","back to normal","(play|let me hear) the original"], ()=> (vcOnRes()||(window.PZA&&PZA.on&&LV&&LV.paused))&&PB.tune? ()=>pbTuneSet(false) : null],
+  [["auto pause","auto pause on","(turn on|switch on|use|enable) [the] auto pause","(wait for me|follow me|only click when i play)"], ()=>()=>mtAutoSet(true)],
+  [["auto pause off","(turn off|switch off|disable|stop) [the] auto pause","(always click|click all the time|don't wait for me)"], ()=>()=>mtAutoSet(false)],
+  [["reload","(reload|refresh) [the] (page|app)","(update|get the new version)"], ()=> !$("updNote").hidden? ()=>location.reload() : null],
   [["save [the] (take|recording)","save (it|this|this take)","keep (it|this take)","export [the] (take|recording)","export (it|this|this take)","export"], ()=> S.buf&&(!LV||(window.PZA&&PZA.on))? ()=>$("tkSave").click() : null],
   [["(on|turn on|turn it on|switch on|switch it on)"], ()=> vcOnRes()? ()=>{ if(!PB.on) pbToggle(); } : vcStartHere("start")],
   [["(off|turn off|turn it off|switch off|switch it off)"], ()=>vcStopHere()],
