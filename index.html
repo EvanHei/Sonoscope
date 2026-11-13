@@ -142,10 +142,9 @@ body.pza #vResults .bar-r .rbtns{display:flex;flex-direction:row;gap:10px}
 @media (prefers-reduced-motion:reduce){.vcov .vcmic{animation:none!important}}
 #lvStaffSvg .lvout{animation:lvOut .3s ease-in forwards;pointer-events:none}
 @media (prefers-reduced-motion:reduce){#lvStaffSvg [data-lk],#lvStaffSvg .lvcy{transition:none}}
-.lvsd .lvsum{flex-direction:row;gap:10px;margin:0 0 14px;justify-content:space-between}
+.lvsd .lvsum{flex-direction:row;gap:8px;margin:0 0 14px;justify-content:space-between}
 .lvsd .lvsum .st{flex:0 1 auto;min-width:0}
-.lvsd .lvsum .st:last-child{text-align:right}
-.lvsd .lvsum .st .lbl{white-space:normal;font-size:calc(14px*var(--fs));letter-spacing:.06em}   /* closer set: "Within" fits half the column */
+.lvsd .lvsum .st .lbl{white-space:normal;font-size:calc(14px*var(--fs));letter-spacing:.03em}   /* closer set: "Within" fits half the column */
 .lvsd .lvsum .st b.num{font-size:calc(26px*var(--fs))}   /* larger, to read at a distance */
 #lvStaffSvg .sn{cursor:inherit}
 #lvStaffSvg.pz .sn{cursor:pointer}
@@ -1243,7 +1242,7 @@ canvas{display:block;width:100%}
 #staffSvg .sttie{opacity:.8}
 #staffSvg .strest{fill:var(--ink);font-family:"Bravura";pointer-events:none}
 #staffSvg .strdot{fill:var(--ink);pointer-events:none}
-#staffSvg .stts{fill:var(--ink);font-family:"EB Garamond",Georgia,serif;font-weight:700;font-size:27px;text-anchor:middle}
+#staffSvg .stts{fill:var(--ink);font-family:"Bravura";font-weight:400;font-size:48px;text-anchor:middle}
 #staffSvg .st3{fill:var(--ink2);font-family:"EB Garamond",Georgia,serif;font-style:italic;font-size:14px;text-anchor:middle}
 #staffSvg .stbeam,#staffSvg .sttie,#staffSvg .stts,#staffSvg .st3{pointer-events:none}
 #staffSvg .ststem,#staffSvg .stflag,#staffSvg .stdot,#staffSvg .sncont{cursor:pointer}
@@ -9926,7 +9925,7 @@ function drawStaff(){
     const e=ev[i];
     cur={clef:e.clef,key:e.key,items:[]};
     cur.x=ST_PAD+6+clefFit(e.clef,1).w+10+sigW(KEYS[e.key].k,0)+18;
-    if(RM&&!sys.length) cur.x+=24;              // the time signature
+    if(RM&&!sys.length) cur.x+=30;              // the time signature
     sys.push(cur);
   };
   for(const tk of toks){
@@ -10002,7 +10001,7 @@ function drawStaff(){
         }
       }
     }
-    if(RM) out+=rgMarks(sy,ev,bot,top,RM,si===0? cx0+clefFit(sy.clef,1).w+10+sigW(KEYS[sy.key].k,0)+14 : -1);
+    if(RM) out+=rgMarks(sy,ev,bot,top,RM,si===0? cx0+clefFit(sy.clef,1).w+10+sigW(KEYS[sy.key].k,0)+20 : -1);
     if(last){
       out+=`<line class="stbar" x1="${f1(x1-6)}" x2="${f1(x1-6)}" y1="${f1(top)}" y2="${f1(bot)}"/>`;
       out+=`<line class="stbar thick" x1="${f1(x1-1.5)}" x2="${f1(x1-1.5)}" y1="${f1(top)}" y2="${f1(bot)}"/>`;
@@ -11656,7 +11655,8 @@ function rgMarks(sy,ev,bot,top,M,tsx){
   let out="";
   if(tsx>=0){
     const [a,b]=RG.meter.split("/");
-    out+=`<text class="stts" x="${f1(tsx)}" y="${f1(top+2*ST_G-1)}">${a}</text><text class="stts" x="${f1(tsx)}" y="${f1(bot-1)}">${b}</text>`;
+    const tsg=v=>[...String(v)].map(d=>String.fromCodePoint(0xE080+(+d))).join("");   // SMuFL timeSig0-9
+    out+=`<text class="stts" x="${f1(tsx)}" y="${f1(top+ST_G)}">${tsg(a)}</text><text class="stts" x="${f1(tsx)}" y="${f1(top+3*ST_G)}">${tsg(b)}</text>`;
   }
   const P=[];
   let bar=false;
@@ -11842,12 +11842,15 @@ function hlSpan(R){
 function stEv(){ ST_OFF=0; return S.staff; }
 /* The two totals at the foot of the sidebar: the take's mean miss and the
    share close enough - within 10 cents, or on Rhythm within 30 ms. */
-function stripPaint(){
-  const RH= ANA.page==="rhy"&&RG.ok&&RG.dev;
+function stripVals(p){
+  const RH= p==="rhy"&&RG.ok&&RG.dev;
   const v= RH? [...RG.dev.values()] : (S.notes||[]).map(n=>n.cents).filter(isFinite), lim= RH? 30 : 10;
-  $("stMean").textContent= v.length? Math.round(v.reduce((a,c)=>a+Math.abs(c),0)/v.length)+(RH? " ms" : " \u00A2") : NA;
-  $("stIn").textContent= v.length? Math.round(100*v.filter(c=>Math.abs(c)<lim).length/v.length)+" %" : NA;
-  $("stInL").innerHTML= RH? "Within 30 ms" : "Within 10 &cent;";
+  return {mean: v.length? Math.round(v.reduce((a,c)=>a+Math.abs(c),0)/v.length)+(RH? " ms" : " \u00A2") : NA,
+    inn: v.length? Math.round(100*v.filter(c=>Math.abs(c)<lim).length/v.length)+" %" : NA, lbl: RH? "Within 30ms" : "Within 10 &cent;"};
+}
+function stripPaint(){
+  const r=stripVals(ANA.page);
+  $("stMean").textContent=r.mean; $("stIn").textContent=r.inn; $("stInL").innerHTML=r.lbl;
 }
 /* From a list to the note itself, on the take. */
 function anaGo(k){ rsSelect(k,true); }   // the note picked, here (no Full Take page)
@@ -12804,8 +12807,9 @@ function pzaStyle(){
     add.forEach(t=>{ try{ ss.insertRule(t,ss.cssRules.length); }catch(err){} });
   }
 }
-const pzaSum=()=>{ if(!PZA.on) return; $("lvMean").textContent=$("stMean").textContent; $("lvIn").textContent=$("stIn").textContent;
-  const l=$("lvIn").previousElementSibling; if(l) l.innerHTML=$("stInL").innerHTML; };
+const pzaSum=()=>{ if(!PZA.on) return; const r=stripVals(ANAF_P||ANA.page);
+  $("lvMean").textContent=r.mean; $("lvIn").textContent=r.inn;
+  const l=$("lvIn").previousElementSibling; if(l) l.innerHTML=r.lbl; };
 function pzaSumHome(){ const l=$("lvIn")&&$("lvIn").previousElementSibling; if(l) l.innerHTML="Within 10 &cent;"; }
 function pzaDock(on){
   let dk=$("pzaDock");
