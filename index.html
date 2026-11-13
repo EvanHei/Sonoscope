@@ -142,8 +142,9 @@ body.pza #vResults .bar-r .rbtns{display:flex;flex-direction:row;gap:10px}
 @media (prefers-reduced-motion:reduce){.vcov .vcmic{animation:none!important}}
 #lvStaffSvg .lvout{animation:lvOut .3s ease-in forwards;pointer-events:none}
 @media (prefers-reduced-motion:reduce){#lvStaffSvg [data-lk],#lvStaffSvg .lvcy{transition:none}}
-.lvsd .lvsum{flex-direction:row;gap:10px;margin:0 0 14px}
-.lvsd .lvsum .st{flex:1;min-width:0}
+.lvsd .lvsum{flex-direction:row;gap:10px;margin:0 0 14px;justify-content:space-between}
+.lvsd .lvsum .st{flex:0 1 auto;min-width:0}
+.lvsd .lvsum .st:last-child{text-align:right}
 .lvsd .lvsum .st .lbl{white-space:normal;font-size:calc(14px*var(--fs));letter-spacing:.06em}   /* closer set: "Within" fits half the column */
 .lvsd .lvsum .st b.num{font-size:calc(26px*var(--fs))}   /* larger, to read at a distance */
 #lvStaffSvg .sn{cursor:inherit}
@@ -2244,7 +2245,7 @@ canvas{display:block;width:100%}
     </div>
     <div class="hr take"></div>
     <div class="strip">
-      <div class="stat"><span class="lbl">Mean Off By</span><b class="num" id="stMean">-</b></div>
+      <div class="stat"><span class="lbl">Average Error</span><b class="num" id="stMean">-</b></div>
       <div class="stat"><span class="lbl" id="stInL">Within 10 &cent;</span><b class="num" id="stIn">-</b></div>
     </div>
   </aside>
@@ -3368,7 +3369,7 @@ function sfFill(line,g){
    than as played. Pieces not in the library: unchanged. With Bach's violin
    sonatas and partitas, MusicNet's four violin movements 79.2 -> 83.4%
    (right 88.5 -> 89.2%); 12 of 339 changed notes shown as written. */
-let XP_USE=true;
+let XP_USE=false;   // off: notes are written as played, never as the piece has them
 const XP={on:3, leave:1, jump:4, ins:0.6, sMaxs:3, rep:0.2, tonic:2, part:0.6, pat:0.05, pcWin:12, pcIn:8, skip:0.5, maxs:8, oct:0.2, mis:-1,
   minM:20, minR:0.8, pTot:48, pRel:0.25, sMinM:12, sMinR:0.75, dMinR:0.65, sMaxSkip:0.1, dMaxSkip:0.2,
   sfMin:2, trMin:3, onMin:0.15, oSf:0.3, sSf:0.5, maxFill:6, show:0.25, rhy:0.6, wDur:0.1, wSf:0.6, wLean:0.2, dwDur:0.3};
@@ -3764,7 +3765,7 @@ function xNames(runs,n){
    MusicNet's cello pieces 9-17 ms sooner, but shown notes right -0.3 to
    -1.8 points - the notes just shown are too often wrong to follow a piece
    by. */
-let XLV_USE=true;
+let XLV_USE=false;   // off: as XP_USE
 const XLV={sc:6, min:2, cen:0.3};
 let XLV_SC=null, XLV_FOR=null, XLV_C=new Map();
 function xLiveScales(){
@@ -8541,14 +8542,8 @@ async function analyze(buf,stay){
   if(S.notes&&S.notes.length>1){ const N0=S.notes; S.notes=leapOut(N0); if(S.notes!==N0) noteRenum(); }
   // what was said to Sonoscope while recording: not notes
   if(S.liveSpeech&&S.liveSpeech.buf===buf&&S.notes&&S.liveSpeech.list.length){ S.notes=S.notes.filter(n=>!vcSaid(n,S.liveSpeech.list)); noteRenum(); }
-  if(S.liveDel&&S.liveDel.buf===buf&&S.notes){
-    for(const d of S.liveDel.list){
-      let k=-1, best=0;
-      S.notes.forEach((n,q)=>{ const o=Math.min(n.t1,d.t1)-Math.max(n.t0,d.t0); if(o>=0.5*Math.max(n.t1-n.t0,d.t1-d.t0)&&o>best){ best=o; k=q; } });
-      if(k>=0){ const [n]=S.notes.splice(k,1); S.undo.push({n,k}); }
-    }
-    noteRenum();
-  }
+  if(S.liveDel) S.liveDel.done=0;
+  liveStrike(buf);
   undoPaint();
   pbReset();
   ANA.fresh=true;
@@ -9879,7 +9874,8 @@ function drawStaff(){
   if(ST_RHY) ev.forEach(e=>{ const v=RG.dev&&RG.dev.get(e.k); e.heads.forEach(h=>h.ms= v==null? NaN : v); });
   // the rhythm guess, on every page: each note's values, split at the bar
   // lines and tied (rgPieces)
-  const RM= RG.ok? RG_M[RG.meter] : null;
+  const pzPlain=window.PZA&&$("lvBox").classList.contains("pzst")&&PZA.side!=="rhy";
+  const RM= RG.ok&&!pzPlain? RG_M[RG.meter] : null;
   const RX=rgRestIdx();
   ev.forEach(e=>{
     e.rp=e.pcs=e.rests=null;
@@ -10781,6 +10777,17 @@ $("pbPlay").addEventListener("click",()=>{ ST_SCR.manual=false; },true);
 $("rsPrev").onclick=()=>rsSelect(S.rk-1,true);
 $("rsNext").onclick=()=>rsSelect(S.rk+1,true);
 
+/* Notes struck on the live staff (S.liveDel) struck here too, as by hand, so Undo brings them back: those not done yet */
+function liveStrike(buf){
+  const D=S.liveDel; if(!D||D.buf!==buf||!S.notes) return false;
+  const L=D.list, from=D.done||0; if(from>=L.length) return false;
+  for(const d of L.slice(from)){
+    let k=-1, best=0;
+    S.notes.forEach((n,q)=>{ const o=Math.min(n.t1,d.t1)-Math.max(n.t0,d.t0); if(o>=0.5*Math.max(n.t1-n.t0,d.t1-d.t0)&&o>best){ best=o; k=q; } });
+    if(k>=0){ const [n]=S.notes.splice(k,1); S.undo.push({n,k}); }
+  }
+  D.done=L.length; noteRenum(); return true;
+}
 /* ---- removing notes ---- */
 /* A note the finder got wrong - a bow scrape, an overtone read as a note of
    its own, a knock in the room - can be struck out by hand. It leaves the
@@ -12663,7 +12670,7 @@ function lvNoteDel(g){
    decoded as Analyze decodes it; the note under the playhead is lit on the staff. Resumed, it slides away and goes
    back to Analyze, which has its own take again. */
 var LVP={open:false,saved:null,buf:null,home:null,tok:0,cur:null};
-function lvPlaySet(st){ const sv=$("lvStaffSvg"); if(sv) sv.classList.toggle("pz",st==="paused");
+function lvPlaySet(st){ try{ if(PB.rate!==1) pbSetRate(1); }catch(err){} const sv=$("lvStaffSvg"); if(sv) sv.classList.toggle("pz",st==="paused");
   document.body.classList.toggle("lvpz",st==="paused");   // no sidebar arrow while paused
   if(st==="paused"&&$("vMain").classList.contains("rail-full")) railFull(false);
   if(st==="paused"){ PZA.gaveUp=false; }
@@ -12688,7 +12695,7 @@ async function pzaStart(L,buf){
   if(!L||!L.paused||PZA.run||PZA.final) return;
   S.liveLog=L.log; S.liveLogSr=L.sr; S.liveLogN=L.dsN; S.dsSeen=!!(L.dsa&&L.dsa.seen);
   S.liveClicks= L.clicks.length? {t0:L.acT0, pause:L.acPause, list:L.clicks} : null;
-  S.liveDel={buf,list:(LVS.del||[]).slice()};
+  S.liveDel={buf,list:LVS.del||[]};   // the list itself: notes struck while it is read count too (liveStrike)
   S.pauses=(L.pauses||[]).slice(0,-1);   // the last is this pause: the take's end
   S.liveSpeech={buf,list:(L.speech||[]).slice()};   // what was said to Sonoscope: not notes
   const ts=takeStamp(); S.stamp=ts.file; S.name="Take "+ts.label; S.notesLog=null; S.takeLive=S.liveLog;
@@ -12704,7 +12711,8 @@ async function pzaStart(L,buf){
   pzaReady();
 }
 // the analysis done: its pages may be opened (the tabs say so); the screen stays as it is
-function pzaReady(){ PZA.buf=S.buf; PZA.on=true; PZA.pending=false; PZA.side=PZA.side||"full"; document.body.classList.add("pza"); pzaTabs(); pzaSum(); pbPaint();
+function pzaReady(){ if(liveStrike(S.buf)){ undoPaint(); S.rk=Math.min(Math.max(S.rk,0),S.notes.length-1); renderResults(); }
+  PZA.buf=S.buf; PZA.on=true; PZA.pending=false; PZA.side=PZA.side||"full"; document.body.classList.add("pza"); pzaTabs(); pzaSum(); pbPaint();
   { const w=PZA.want; PZA.want=null; if(w&&(w!=="rhy"||RG.ok)) pzaGo(w); else{ pzaTabs(); if(PZA.side==="full") pzaStaff(!!RG.ok); } }
   if(!PZA.sumObs){ PZA.sumObs=new MutationObserver(pzaSum); PZA.sumObs.observe($("stMean"),{childList:true,characterData:true,subtree:true}); PZA.sumObs.observe($("stIn"),{childList:true,characterData:true,subtree:true}); } }
 // Intonation or Rhythm: Analyze's page for the paused take, the player taken there with it
@@ -12797,8 +12805,8 @@ function pzaStyle(){
   }
 }
 const pzaSum=()=>{ if(!PZA.on) return; $("lvMean").textContent=$("stMean").textContent; $("lvIn").textContent=$("stIn").textContent;
-  const l=$("lvIn").previousElementSibling; if(l) l.innerHTML=$("stInL").innerHTML.replace(/^Within /,"Within<br>"); };
-function pzaSumHome(){ const l=$("lvIn")&&$("lvIn").previousElementSibling; if(l) l.innerHTML="Within<br>10 &cent;"; }
+  const l=$("lvIn").previousElementSibling; if(l) l.innerHTML=$("stInL").innerHTML; };
+function pzaSumHome(){ const l=$("lvIn")&&$("lvIn").previousElementSibling; if(l) l.innerHTML="Within 10 &cent;"; }
 function pzaDock(on){
   let dk=$("pzaDock");
   if(on){
@@ -13033,7 +13041,7 @@ async function lvMatch(c,midi,voiced,ft){
 }
 // what the staff writes: the matched notes, and any found since
 /* ---- slides ---- */
-const GL_MAX=0.25, GL_TRAVEL=0.6, GL_STEP_MAX=0.08, GL_HELD=0.2, GL_GAP=0.08;
+const GL_MAX=0.25, GL_TRAVEL=0.6, GL_STEP_MAX=0.08, GL_HELD=0.2, GL_GAP=0.08, GL_SLOW=0.5, GL_JUMP=0.6, GL_PASS=0.3, GL_STEP=5;
 // a note's readings moving the whole way: their first third to their last by GL_TRAVEL or more, one way, no step back
 // worth the name - the way it moves (1 up, -1 down), else 0. The trained model's track (SwiftF0) follows a slide;
 // the tracker's snaps to the notes
@@ -13057,8 +13065,41 @@ function glideOut(N,pitchAt){
     const d=n.t1-n.t0; if(d>GL_MAX) return null;
     return {d, mv: n.gmv!=null? n.gmv : glMv(pitchAt(n.t0,n.t1))};   // marked when found (live), else read now
   });
+  // A slow slide: between two held notes a run of quick notes (each under GL_SLOW), touching, each a step of one or two
+  // semitones on from the last the way the slide goes, all between the two - and the pitch track over the run gliding,
+  // never jumping (GL_JUMP) from one reading to the next, and still moving inside the notes passed through (GL_PASS
+  // semitones on average, their first third to their last). Fingered notes jump and then sit on their pitch; a slide does not.
+  const dur=n=>n.t1-n.t0, near2=(x,y)=> y.t0-x.t1<=GL_GAP, slow=new Set();
+  for(let a=0;a<N.length-2;a++){
+    const H0=N[a]; if(dur(H0)<GL_HELD||H0.second) continue;
+    const dir=Math.sign(N[a+1].target-H0.target); if(!dir) continue;
+    // the run of steps on from it, the slide's way; each held note in it tried as where the slide went
+    let k=a, done=false;
+    while(!done&&k+1<N.length&&near2(N[k],N[k+1])&&!N[k+1].second){
+      const st=N[k+1].target-N[k].target; if(Math.sign(st)!==dir||Math.abs(st)>GL_STEP) break;
+      if(k>a&&dur(N[k])>=GL_SLOW) break;     // a note held this long is not passed through
+      k++;
+      const H1=N[k]; if(k<a+2||dur(H1)<GL_HELD||Math.abs(H1.target-H0.target)<2) continue;
+      const trk=q=> q.gtr||pitchAt(q.t0,q.t1), mid=N.slice(a+1,k).flatMap(trk);
+      const ends=[...trk(H0).filter(isFinite).slice(-3)], into=trk(H1).filter(isFinite).slice(0,3), m=ends.concat(mid,into), f=m.filter(isFinite);
+      if(f.length<4||f.length<0.6*m.length) continue;
+      let prev=NaN, gap=0, jump=false;
+      for(const v of m){ if(!isFinite(v)){ if(++gap>3){ jump=true; break; } continue; } gap=0; if(isFinite(prev)&&Math.abs(v-prev)>GL_JUMP){ jump=true; break; } prev=v; }
+      if(jump||(f[f.length-1]-f[0])*dir<1) continue;
+      // and inside each note passed through the pitch still moving the slide's way (a fingered note sits on its pitch)
+      let tv=0, nt=0;
+      for(let q=a+1;q<k;q++){ const g=trk(N[q]).filter(isFinite); if(g.length<3) continue; const c=Math.max(1,Math.floor(g.length/3));
+        tv+=(median(g.slice(-c))-median(g.slice(0,c)))*dir; nt++; }
+      // a semitone run has to be seen moving inside its notes; a wider step's jump, were it fingered, shows in the readings
+      let big=false; for(let q=a+1;q<=k;q++) if(Math.abs(N[q].target-N[q-1].target)>=3) big=true;
+      if(!big&&(!nt||tv/nt<GL_PASS)) continue;
+      for(let q=a+1;q<k;q++) slow.add(q);
+      a=k-1; done=true;
+    }
+  }
   for(let i=0;i<N.length;i++){
     const n=N[i], p=P[i], A=N[i-1], B=N[i+1];
+    if(slow.has(i)) continue;
     if(p){
       const near=(x,y)=> x&&y&&y.t0-x.t1<=GL_GAP;
       // moving the whole way, on from the note before or into the note after, the way it moves
@@ -13165,7 +13206,7 @@ async function lvBgNM(midi,voiced,upTo,ft,c){
       // a note held longer than the window can see the end of: written as it stands, cut where the window ends
       if(!N.length&&r1-r0>=LVBG_NR&&t0<=done+0.05&&settle-t0>0.2){ t1=settle; last=true; }
       else{ end=Math.min(end,t0); break; } } // not settled: from here next time
-    N.push({target:q.midi,cents:lvBgCentsOf(t0,t1,q.midi,midi,voiced,ft,c),t0,t1,second:null,key:q.midi+"@"+t0.toFixed(2),gmv:glMv(glSf(c.G,c.aref,t0,t1))});   // moving the whole way: part of a slide (glideOut)
+    N.push({target:q.midi,cents:lvBgCentsOf(t0,t1,q.midi,midi,voiced,ft,c),t0,t1,second:null,key:q.midi+"@"+t0.toFixed(2),...(g=>({gmv:glMv(g),gtr:g}))(glSf(c.G,c.aref,t0,t1))});   // moving the whole way: part of a slide (glideOut)
     if(last){ end=t1; break; }
   }
   LVS.bg.push(...N);
@@ -13218,7 +13259,7 @@ new MutationObserver(lvBtnHome).observe($("lvBox"),{attributes:true,attributeFil
     const add=[]; for(const r of R) if(r.selectorText&&r.selectorText.includes("#staffSvg")&&!/sndel|:hover/.test(r.selectorText)) add.push(r.cssText.replace(/#staffSvg/g,"#lvStaffSvg"));
     add.forEach(t=>{ try{ ss.insertRule(t,ss.cssRules.length); }catch(err){} });
   }
-  { const side=document.createElement("aside"); side.className="lvside"; side.innerHTML='<div class="lvsl"><canvas id="lvNow"></canvas></div><div class="lvsd"><div class="lvr lvr1"><span class="c0"><i class="lvslot" data-id="lvNote"></i><span class="dsl">&thinsp;/&thinsp;</span><i class="lvslot" data-id="lvNote2"></i></span><div class="st"><span class="lbl">Vibrato rate</span><i class="lvslot" data-id="lvVib"></i></div><div class="st"><span class="lbl">Vibrato depth</span><i class="lvslot" data-id="lvDep"></i></div><div class="st"><span class="lbl">Dynamic</span><i class="lvslot" data-id="lvLvl"></i></div></div><div class="lvr lvr2"><span class="c0"></span><div class="st"><span class="lbl">Vibrato rate</span><i class="lvslot" data-id="lvVib2"></i></div><div class="st"><span class="lbl">Vibrato depth</span><i class="lvslot" data-id="lvDep2"></i></div><div class="st"><span class="lbl">Dynamic</span><i class="lvslot" data-id="lvLvl2"></i></div></div><div class="lvbtn"><div class="lvr lvsum"><div class="st"><span class="lbl">Mean<br>Off By</span><b class="num" id="lvMean">-</b></div><div class="st"><span class="lbl">Within<br>10 &cent;</span><b class="num" id="lvIn">-</b></div></div></div></div>'; $("lvBox").closest(".split").appendChild(side); }
+  { const side=document.createElement("aside"); side.className="lvside"; side.innerHTML='<div class="lvsl"><canvas id="lvNow"></canvas></div><div class="lvsd"><div class="lvr lvr1"><span class="c0"><i class="lvslot" data-id="lvNote"></i><span class="dsl">&thinsp;/&thinsp;</span><i class="lvslot" data-id="lvNote2"></i></span><div class="st"><span class="lbl">Vibrato rate</span><i class="lvslot" data-id="lvVib"></i></div><div class="st"><span class="lbl">Vibrato depth</span><i class="lvslot" data-id="lvDep"></i></div><div class="st"><span class="lbl">Dynamic</span><i class="lvslot" data-id="lvLvl"></i></div></div><div class="lvr lvr2"><span class="c0"></span><div class="st"><span class="lbl">Vibrato rate</span><i class="lvslot" data-id="lvVib2"></i></div><div class="st"><span class="lbl">Vibrato depth</span><i class="lvslot" data-id="lvDep2"></i></div><div class="st"><span class="lbl">Dynamic</span><i class="lvslot" data-id="lvLvl2"></i></div></div><div class="lvbtn"><div class="lvr lvsum"><div class="st"><span class="lbl">Average Error</span><b class="num" id="lvMean">-</b></div><div class="st"><span class="lbl">Within 10 &cent;</span><b class="num" id="lvIn">-</b></div></div></div></div>'; $("lvBox").closest(".split").appendChild(side); }
   if(!window.VC_PHONE) lvBgWarm();     // the staff's note model built ahead, while idle (not on a phone)
   lvSlots(true);
   try{ localStorage.removeItem("sonoscope.liveDisplay"); localStorage.removeItem("sonoscope.liveDisplayV2"); }catch(err){}
