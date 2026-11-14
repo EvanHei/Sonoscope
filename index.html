@@ -397,12 +397,13 @@ body{
 #recClock[hidden]{display:none}
 /* in the lanes box, at its top left, over the trace */
 /* reading the take: three grey dots in a row, each rising and settling in turn */
-#lvSpin{position:absolute;top:20px;left:16px;z-index:3;display:flex;gap:5px;pointer-events:none}
+#lvSpin{position:absolute;top:10px;left:8px;z-index:4;display:flex;gap:5px;padding:12px 9px 6px;border-radius:6px;background:var(--sunk);box-shadow:0 0 10px 4px var(--sunk);pointer-events:none}
 #lvSpin[hidden]{display:none}
 #lvSpin i{width:6px;height:6px;border-radius:50%;background:var(--ink3);animation:lvDot 1.3s ease-in-out infinite}
+/* gold as it rises, most at the top of the hop */
 #lvSpin i:nth-child(2){animation-delay:.18s}
 #lvSpin i:nth-child(3){animation-delay:.36s}
-@keyframes lvDot{0%,50%,100%{transform:translateY(0)}25%{transform:translateY(-6px)}}
+@keyframes lvDot{0%,50%,100%{transform:translateY(0);background:var(--ink3)}25%{transform:translateY(-6px);background:var(--amber)}}
 @media (prefers-reduced-motion:reduce){#lvSpin i{animation:none}}
 #lvBox>#recClock{position:absolute;top:12px;right:14px;left:auto;z-index:3;margin:0;flex:none;pointer-events:none}
 /* The take's dot, just left of the clock: red and pulsing while recording,
@@ -1177,6 +1178,13 @@ canvas{display:block;width:100%}
 .player .seekw .seek{margin-top:0}
 .pbrng{position:absolute;inset:0;pointer-events:none}
 .pbpz{position:absolute;inset:0;pointer-events:none}
+/* the picked passage on the player's bar: its ends in gold, the rest of the bar dimmed; both glide as the ends move */
+.pssk{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s ease}
+.pssk.on{opacity:1}
+.pssk b{position:absolute;top:50%;height:12px;margin-top:-6px;background:var(--bg);opacity:.78;transition:left .2s ease-out,width .2s ease-out}
+.pssk .psdl{left:0;width:0}
+.pssk i{position:absolute;top:-6px;bottom:-6px;width:0;border-left:2px solid var(--amber);margin-left:-1px;transition:left .2s ease-out}
+@media (prefers-reduced-motion:reduce){.pssk,.pssk b,.pssk i{transition:none}}
 .pbtunew{display:inline-flex;align-items:center;gap:9px;flex:none;order:20;margin-left:auto;position:relative}   /* at the right of the row */
 .pbtunel{cursor:pointer}
 /* Import and Export over Calibrate, at the right of the player's row: the Export box's right edge the staff's */
@@ -1676,10 +1684,9 @@ input.fader::-moz-range-thumb{width:12px;height:22px;border-radius:4px;backgroun
 input.fader:focus{outline:none}
 input.fader:focus-visible{outline:1px solid var(--amber);outline-offset:4px}
 .mtslide input.fader{height:var(--th)}   /* the slider's height as before; the cap stands just over it */
-/* the player's volume: its panel opens sideways now, the fader lying flat in it */
-.volpop{width:150px}
-.pvol:hover .volpop,.pvol:focus-within .volpop{height:44px}
-.volpop input.fader{position:absolute;left:50%;top:50%;width:128px;transform:translate(-50%,-50%)}
+/* the player's volume: upright in its panel over the speaker, the fader turned a quarter so its low end is at the foot */
+.volpop{width:40px}
+.volpop input.fader{position:absolute;left:50%;top:50%;width:96px;height:24px;transform:translate(-50%,-50%) rotate(-90deg)}
 /* The free-entry box: any count from 1 to 16, set apart by its sunk ground. */
 .mtsubn{
   font:inherit;font-size:calc(26px*var(--fs));width:92px;height:56px;text-align:center;
@@ -2292,7 +2299,7 @@ nav.tabs button[aria-selected="true"]{background:var(--hov);border-color:var(--l
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3 2.5 6l3 3"/><path d="M2.5 6h7a4 4 0 0 1 0 8H7"/></svg>Undo
       </button>
       </div>
-      <div class="seekw" id="pbSeekW"><input type="range" class="seek" id="pbSeek" min="0" max="1" step="0.01" value="0" aria-label="Position in the take"><div class="pbrng" id="pbRng" hidden><i id="pbRng0"></i><i id="pbRng1"></i></div><div class="pbpz" id="pbPz"></div></div>
+      <div class="seekw" id="pbSeekW"><input type="range" class="seek" id="pbSeek" min="0" max="1" step="0.01" value="0" aria-label="Position in the take"><div class="pbrng" id="pbRng" hidden><i id="pbRng0"></i><i id="pbRng1"></i></div><div class="pbpz" id="pbPz"></div><div class="pssk" id="psSk" aria-hidden="true"><b class="psdl"></b><b class="psdr"></b><i class="psl"></i><i class="psr"></i></div></div>
     </div>
     <div id="rsWarn" class="note-t"></div>
     </div>
@@ -3976,6 +3983,76 @@ function noteName(m){
 }
 
 /* ---- per-note metrics ---- */
+/* A note heard about halfway between two semitones - played that far out of tune, as a quick scale often is - is
+   named by the nearer of the two, and that can be the one not in the key: a flat B-flat in E-flat major read as A.
+   Where the notes around it (KS_R either side) all belong to the key the staff writes there, and the note is at
+   least KS_MIN cents off towards a note of that key while its own name is not in it, it is named as the note of the
+   key, its cents (now the other way, past -50 or +50) showing how far off it was. Not in double stops. A passage
+   with accidentals of its own is left as read. Bach cello recordings and MusicNet cello: right 96.4 -> 96.3% and
+   80.4% unchanged (a note in ten thousand); the player's scales: 11 names moved, 6 a missing scale note found, 5 a
+   slide named as the scale note beside it (2026-11-15). */
+/* In a fast scale the pitch is read over a window longer than a note, so a quick note can come out as a blend of its
+   neighbours, and a shift leaves its slide. The key here is the one (of its seven notes) that leaves the fewest notes,
+   by time, off it within SC_KR either side - the whole take's best unless a stretch fits another clearly better
+   (SC_MG) - so the misread notes themselves cannot pull it to a neighbouring key. Where the stretch is mostly in it
+   (of SC_R notes either side, at most SC_SHARE off it, and those all short) and moves as a scale (SC_STEP of its moves
+   by step), a run of up to two notes under SC_DUR off the key, between two notes of it, is mapped in order onto the
+   key's notes lying between those two (each within a step and a half of where it was heard); one left over and under
+   SC_DROP, passing between them, is a slide and goes, its time to the note before. Bach cello recordings: found 88.3%
+   unchanged, right 96.4 -> 96.3%; MusicNet cello unchanged (74.0/80.4%); the player's Eb scales, notes off the key:
+   18 -> 2, 9 -> 2, 7 -> 0, 7 -> 5, 1 -> 0, 1 -> 0 (2026-11-15, with keySnap after it). */
+let SC_USE=true; const SC_DUR=0.16, SC_DROP=0.09, SC_SHARE=0.34, SC_R=6, SC_STEP=0.8, SC_KR=10, SC_MG=1;
+function scaleClean(N){
+  if(!SC_USE||!N||N.length<8) return N;
+  const SEV=[[0,2,4,5,7,9,11],[0,2,3,5,7,8,10]], in7=(m,K)=>SEV[K.minor?1:0].includes((((m-K.pc)%12)+12)%12);
+  const wt=n=>Math.min(1.5,Math.max(0.12,n.dur));
+  const offW=(K,a,b)=>{ let o=0; for(let q=a;q<=b;q++) if(!N[q].second&&!in7(N[q].target,K)) o+=wt(N[q]); return o; };
+  let GF=KEYS[0], gv=1e9; for(const K of KEYS){ const v=offW(K,0,N.length-1); if(v<gv){ gv=v; GF=K; } }
+  const key=N.map((_,i)=>{ const a=Math.max(0,i-SC_KR), b=Math.min(N.length-1,i+SC_KR); let best=GF, bv=offW(GF,a,b);
+    for(const K of KEYS){ const v=offW(K,a,b); if(v<bv-SC_MG){ bv=v; best=K; } } return best; });
+  const gone=new Set();
+  const gate=(i,K)=>{ let o=0,c=0;
+    for(let q=Math.max(0,i-SC_R);q<=Math.min(N.length-1,i+SC_R);q++){ if(q===i||gone.has(q)) continue; c++;
+      if(!in7(N[q].target,K)){ if(N[q].dur>=SC_DUR) return false; o++; } }
+    if(!(c>=4&&o<=SC_SHARE*c)) return false;
+    let st=0,mv=0; for(let q=Math.max(0,i-SC_R);q<Math.min(N.length-1,i+SC_R);q++){ mv++; if(Math.abs(N[q+1].target-N[q].target)<=2) st++; }
+    return mv>0&&st/mv>=SC_STEP; };
+  for(let i=1;i+1<N.length;i++){
+    const K=key[i], n=N[i];
+    if(n.second||in7(n.target,K)||n.dur>=SC_DUR||!gate(i,K)) continue;
+    let j=i; if(j+1<N.length&&!N[j+1].second&&!in7(N[j+1].target,K)&&N[j+1].dur<SC_DUR) j++;
+    const P=N[i-1], Q=N[j+1];
+    if(!P||!Q||P.second||Q.second||!in7(P.target,K)||!in7(Q.target,K)||P.target===Q.target){ i=j; continue; }
+    const lo=Math.min(P.target,Q.target), hi=Math.max(P.target,Q.target), btw=[];
+    for(let x=lo+1;x<hi;x++) if(in7(x,K)) btw.push(x);
+    if(Q.target<P.target) btw.reverse();
+    let k=0;
+    for(let r=i;r<=j;r++){
+      const m=N[r], at=m.target+(m.cents||0)/100;
+      let b=-1; for(let q=k;q<btw.length;q++) if(Math.abs(btw[q]-at)<=1.5&&(b<0||Math.abs(btw[q]-at)<Math.abs(btw[b]-at))) b=q;
+      if(b>=0){ const x=btw[b]; m.cents=(m.cents||0)+(m.target-x)*100; m.target=x; m.name=noteName(x); m.keySnap=true; k=b+1; }
+      else if(m.dur<SC_DROP&&m.target>lo&&m.target<hi){ gone.add(r); const pv=r>i&&!gone.has(r-1)? N[r-1] : P; pv.t1=m.t1; pv.dur=pv.t1-pv.t0; }
+    }
+    i=j;
+  }
+  return gone.size? N.filter((_,i)=>!gone.has(i)) : N;
+}
+let KS_USE=true; const KS_MIN=30, KS_R=6;
+function keySnap(N){
+  if(!KS_USE||!N||N.length<8) return 0;
+  const kp=guessKeys(N.map(n=>({dur:n.dur,ps:[{midi:n.target}].concat(n.second? [{midi:n.second.midi}] : [])})));
+  const MAJ=[0,2,4,5,7,9,11], MIN=[0,2,3,5,7,8,9,10,11];
+  const inK=(m,K)=>(K.minor? MIN : MAJ).includes((((m-K.pc)%12)+12)%12);
+  let k=0;
+  N.forEach((n,i)=>{
+    if(n.second||!isFinite(n.cents)||Math.abs(n.cents)<KS_MIN) return;
+    const K=KEYS[kp[i]], d=Math.sign(n.cents), alt=n.target+d;
+    if(inK(n.target,K)||!inK(alt,K)) return;
+    for(let q=Math.max(0,i-KS_R);q<=Math.min(N.length-1,i+KS_R);q++) if(q!==i&&!inK(N[q].target,K)) return;
+    n.target=alt; n.cents-=100*d; n.name=noteName(alt); n.keySnap=true; k++;
+  });
+  return k;
+}
 function measureNotes(notes,midi,frames,x,fft,re,im,hann){
   const dt=HOP/SR, fsP=SR/HOP;
   const dsOn=dsAna();
@@ -8852,6 +8929,8 @@ async function analyze(buf,stay){
   if(S.notes&&S.notes.length>1){ const N0=S.notes; S.notes=leapOut(N0); if(S.notes!==N0) noteRenum(); }
   // what was said to Sonoscope while recording: not notes
   if(S.liveSpeech&&S.liveSpeech.buf===buf&&S.notes&&S.liveSpeech.list.length){ S.notes=S.notes.filter(n=>!vcSaid(n,S.liveSpeech.list)); noteRenum(); }
+  // a note between two semitones, in a passage plainly in one key: named as the key's (keySnap)
+  if(S.notes&&!dsAna()){ const N0=S.notes; S.notes=scaleClean(N0); if(S.notes!==N0) noteRenum(); S.ksN=keySnap(S.notes); }
   if(S.liveDel) S.liveDel.done=0;
   liveStrike(buf);
   undoPaint();
@@ -12970,7 +13049,7 @@ function lvStaffDraw(N){
   const H=LVS_TOP+rows.length*LVS_LH;
   svg.setAttribute("viewBox","0 0 "+f1(W)+" "+f1(H));
   svg.style.height=f1(H*sc)+"px";
-  if(LVS.follow) lvStaffEnd();
+  if(LVS.follow&&!(LV&&LV.paused&&(PB.on||PB.at>0))) lvStaffEnd();   // not while a paused take plays back
 }
 /* The take's two totals over the buttons, as at the foot of Analyze's sidebar: the mean miss of the notes written,
    and the share within 10 cents */
@@ -13341,11 +13420,29 @@ function pscPlayMark(){ const b=$("lvBox"); if(b) b.classList.toggle("psplay",!!
     if(PSC.on&&LV&&LV.paused&&!pscNoteAt(e.target)&&!e.target.closest("#lvFollow")){ e.stopImmediatePropagation(); }
   },true);
   box.addEventListener("dblclick",()=>{ if(PSC.on) pscClear(); });
-  document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&PSC.on&&LV&&LV.paused) pscClear(); });
+  // Escape or Backspace lets the passage go (not while typing in a box)
+  document.addEventListener("keydown",e=>{
+    if(!(PSC.on&&LV&&LV.paused)||e.ctrlKey||e.metaKey||e.altKey) return;
+    const t=e.target, tag=t&&t.tagName;
+    if(e.key==="Backspace"&&(tag==="TEXTAREA"||tag==="SELECT"||(t&&t.isContentEditable)||(tag==="INPUT"&&t.type!=="range"))) return;
+    if(e.key==="Escape"||e.key==="Backspace"){ e.preventDefault(); pscClear(); }
+  });
 }
 // redrawn staffs keep it
 { const d0=drawStaff; drawStaff=function(){ const r=d0.apply(this,arguments); if(PSC.on) pscPaint(); return r; }; }
 { const l0=lvStaffDraw; lvStaffDraw=function(){ const r=l0.apply(this,arguments); if(PSC.on) pscPaint(); return r; }; }
+/* The passage on the player's bar: placed from the take's length whenever the passage is drawn on the staff. */
+function pscSeek(){
+  const sk=$("psSk"); if(!sk) return;
+  const mx=+$("pbSeek").max||0, on=PSC.on&&mx>0.05&&!!(LV&&LV.paused);
+  sk.classList.toggle("on",on);
+  if(!on) return;
+  const p=t=>Math.max(0,Math.min(100,t/mx*100)), a=p(PSC.t0), b=p(PSC.t1);
+  sk.querySelector(".psdl").style.width=a+"%";
+  const r=sk.querySelector(".psdr"); r.style.left=b+"%"; r.style.width=(100-b)+"%";
+  sk.querySelector(".psl").style.left=a+"%"; sk.querySelector(".psr").style.left=b+"%";
+}
+{ const p0=pscPaint; pscPaint=function(){ const r=p0.apply(this,arguments); try{ pscSeek(); }catch(err){} return r; }; }
 function lvPlaySlot(){
   let el=$("lvPlay");
   if(!el){ el=document.createElement("div"); el.className="lvplay"; el.id="lvPlay"; el.innerHTML='<div class="lvpin"></div>'; $("lvBox").after(el); }
@@ -13424,7 +13521,7 @@ function lvPlayCur(off){
   sn.classList.add("cur");
   if(PB.on){
     const box=$("lvStaffBox"), b=box.getBoundingClientRect(), r=g.getBoundingClientRect();
-    if(r.top<b.top||r.bottom>b.bottom){ if(LVS.follow) lvFollow(false); box.scrollTo({top:box.scrollTop+r.top-b.top-24,behavior:"smooth"}); }
+    if(r.top<b.top||r.bottom>b.bottom){ LVS.auto=performance.now(); box.scrollTo({top:box.scrollTop+r.top-b.top-24,behavior:"smooth"}); }
   }
 }
 // to the newest line, gliding
