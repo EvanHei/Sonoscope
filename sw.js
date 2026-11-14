@@ -14,6 +14,7 @@ self.addEventListener("fetch",e=>{
   if(r.method!=="GET"||r.headers.has("range")) return;
   const u=new URL(r.url);
   if(u.origin!==location.origin||u.pathname.endsWith("/sw.js")) return;
+  if(u.pathname.endsWith("/prototype.html")) return;   // a local test page: always fresh, never kept
   const key=u.origin+u.pathname.replace(/\/$/,"/index.html");
   e.respondWith((async()=>{
     const c=await caches.open(CACHE), hit=await c.match(key);

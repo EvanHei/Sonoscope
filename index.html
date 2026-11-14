@@ -7,7 +7,7 @@
 .lvbot,#lvStaffBox,.lvfollow,.lvslot{display:none}
 .lvside{display:none}
 #vMain.lay2:has(#lvBox.tapbox)>.split:not(#dsSplit){grid-template-columns:minmax(0,1fr) calc(267px + 87px*var(--fs))!important}
-#vMain.lay2:has(#lvBox.tapbox) .lvside{display:flex;flex-direction:row;gap:6px;min-height:0;margin:14px 24px 12px 0}
+#vMain.lay2:has(#lvBox.tapbox) .lvside{display:flex;flex-direction:row;gap:6px;min-height:0;margin:14px 12px 12px 0}
 /* the ruler: the full height of the staff box beside it */
 .lvsl{flex:0 0 calc(40px + 37px*var(--fs));position:relative;min-height:0;overflow:hidden}
 .lvsl canvas{position:absolute;inset:0;width:100%;height:100%}
@@ -147,6 +147,21 @@ body.pza #vResults .bar-r .rbtns{display:flex;flex-direction:row;gap:10px}
 .lvsd .lvsum .st .lbl{white-space:normal;font-size:calc(14px*var(--fs));letter-spacing:.03em}   /* closer set: "Within" fits half the column */
 .lvsd .lvsum .st b.num{font-size:calc(26px*var(--fs))}   /* larger, to read at a distance */
 #lvStaffSvg .sn{cursor:inherit}
+/* a passage picked while paused: the notes outside it faded back, its ends marked in gold */
+#lvStaffSvg [data-lk^="n"]>*{transition:opacity .4s ease}
+#lvStaffSvg .psdim>*{opacity:.18}
+#staffSvg .psk{transition:opacity .4s ease}
+#staffSvg .psk.psdim{opacity:.18}
+.psbarg{transition:transform .16s ease-out}
+.psbar{stroke:var(--amber);stroke-width:1.6;stroke-linecap:round;pointer-events:none;opacity:0;animation:psIn .4s ease forwards;transition:stroke-width .12s}
+.psbarg.now .psbar{animation:none;opacity:.95}
+.pshit{stroke:transparent;stroke-width:16;pointer-events:stroke;cursor:col-resize}
+.psbarg:hover .psbar,.psbarg.drag .psbar{stroke-width:2.6}
+/* with a passage picked: its ends at plain brightness, no glow, unless the take is playing */
+#lvBox.pson:not(.psplay) #lvStaffSvg .sn .hd,#lvBox.pson:not(.psplay) #staffSvg .sn .hd,#lvBox.psdrag #lvStaffSvg .sn .hd,#lvBox.psdrag #staffSvg .sn .hd{filter:none!important}
+@keyframes psIn{to{opacity:.95}}
+#lvBox.psdrag,#lvBox.psdrag *{cursor:col-resize!important;user-select:none}
+@media (prefers-reduced-motion:reduce){#lvStaffSvg [data-lk^="n"]>*,#staffSvg .psk{transition:none}.psbar{animation:none;opacity:.95}.psbarg{transition:none}}
 #lvStaffSvg.pz .sn{cursor:pointer}
 @keyframes lvIn{from{opacity:0}to{opacity:1}}
 #lvStaffSvg .lvnew{animation:lvIn .52s ease-out both}
@@ -766,6 +781,19 @@ canvas{display:block;width:100%}
 .vsel button[aria-pressed="true"]{background:var(--hov);color:var(--amber)}
 .vsel button:focus{outline:none}
 .vsel button:focus-visible{outline:1px solid var(--amber);outline-offset:-2px}
+/* the track and the raised choice */
+.vsel{background:var(--sunk);border-color:var(--line);border-radius:7px;padding:3px;gap:3px;overflow:visible}
+.vsel button{border-radius:5px;border:1px solid transparent;transition:background .2s ease,color .2s ease,border-color .2s ease,box-shadow .2s ease,text-shadow .2s ease}
+.vsel button+button{border-left:1px solid transparent}
+.vsel button[aria-pressed="true"]{background:var(--hov);border-color:var(--line2);color:var(--amber);
+  box-shadow:0 1px 3px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04);
+}
+/* the icon: not coloured, but glowing with the word when chosen */
+/* the icon in the word's own colour: gold with it when chosen */
+.vsel button svg{color:inherit;transition:color .2s ease}
+.vsel button[aria-pressed="true"] svg{color:inherit}
+[data-theme="light"] .vsel button[aria-pressed="true"]{box-shadow:0 1px 2px rgba(60,40,20,.18)}
+@media (prefers-reduced-motion:reduce){.vsel button,.vsel button svg{transition:none}}
 /* A pair the evidence has not settled on yet: shown, but faintly. */
 .now.tent{opacity:.42}
 /* The note on a staff, beside its name: as tall as the name and its Hz line. */
@@ -1619,6 +1647,39 @@ canvas{display:block;width:100%}
 .mtctl{display:flex;align-items:center;gap:22px;margin-top:46px}
 .mtsubw{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:44px}
 .mtsubs{display:flex;flex-direction:column;align-items:center;gap:14px}
+/* Steppers: − and + either side of the number, in one sunken track; the number in a raised window */
+.stp{display:inline-flex;align-items:stretch;background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:3px;gap:3px;vertical-align:middle}
+.stp>button,.stp>button.btn{font:inherit;min-width:36px;width:auto;height:auto;padding:0 8px;margin:0;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--ink2);box-shadow:none;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation;transition:background .15s,color .15s}
+.stp>button:hover,.stp>button.btn:hover{background:var(--hov2);color:var(--ink);border-color:transparent}
+.stp>button:active{background:var(--hov)}
+.stp>button svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+.stp>input{margin:0;background:var(--hov)!important;border:1px solid var(--line2)!important;border-radius:5px!important;text-align:center!important;color:var(--ink);
+  box-shadow:0 1px 3px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04);font-variant-numeric:lining-nums tabular-nums;-moz-appearance:textfield}
+.stp>input::-webkit-inner-spin-button,.stp>input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.stp>input:focus{outline:none;border-color:var(--amber-d)!important}
+[data-theme="light"] .stp>input{box-shadow:0 1px 2px rgba(60,40,20,.18)}
+/* Reference A: the number in its window, Hz after */
+.stp>#aref{width:4.6ch!important;font-size:calc(19px*var(--fs));padding:3px 4px;color:var(--amber)}
+.roin{align-items:center}
+.stp>#fsIn{height:34px}
+.stp>.mtsubn{width:64px;height:46px}   /* the stepper no taller than the box it replaced */
+/* Volume: a horizontal fader */
+input.fader{-webkit-appearance:none;appearance:none;height:24px;margin:0;background:transparent;cursor:pointer;--f:.5}
+input.fader::-webkit-slider-runnable-track{height:12px;box-sizing:border-box;border-radius:4px;border:1px solid var(--line);
+  background:linear-gradient(90deg,color-mix(in srgb,var(--amber) 30%,transparent),var(--amber)) 0 0/calc(var(--f)*(100% - 12px) + 6px) 100% no-repeat,var(--sunk)}
+input.fader::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:22px;margin-top:-6px;border-radius:4px;background:var(--hov);border:1px solid var(--line2);
+  box-shadow:0 1px 3px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06);cursor:pointer}
+input.fader::-moz-range-track{height:12px;box-sizing:border-box;border-radius:4px;border:1px solid var(--line);background:var(--sunk)}
+input.fader::-moz-range-progress{height:12px;border-radius:4px;background:linear-gradient(90deg,color-mix(in srgb,var(--amber) 30%,transparent),var(--amber))}
+input.fader::-moz-range-thumb{width:12px;height:22px;border-radius:4px;background:var(--hov);border:1px solid var(--line2);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+input.fader:focus{outline:none}
+input.fader:focus-visible{outline:1px solid var(--amber);outline-offset:4px}
+.mtslide input.fader{height:var(--th)}   /* the slider's height as before; the cap stands just over it */
+/* the player's volume: its panel opens sideways now, the fader lying flat in it */
+.volpop{width:150px}
+.pvol:hover .volpop,.pvol:focus-within .volpop{height:44px}
+.volpop input.fader{position:absolute;left:50%;top:50%;width:128px;transform:translate(-50%,-50%)}
 /* The free-entry box: any count from 1 to 16, set apart by its sunk ground. */
 .mtsubn{
   font:inherit;font-size:calc(26px*var(--fs));width:92px;height:56px;text-align:center;
@@ -1725,7 +1786,13 @@ canvas{display:block;width:100%}
    the same place in both. The pane not in use is there but unseen. */
 .ckpanes{display:grid}
 .ckpane{grid-area:1/1;display:grid;grid-template-rows:1fr auto;justify-items:center;align-items:center}
-.ckpane[hidden]{display:grid;visibility:hidden}
+.ckpane[hidden]{display:grid;visibility:hidden;opacity:0;pointer-events:none}
+.ckpane{transition:opacity .25s ease,visibility .25s}
+@media (prefers-reduced-motion:reduce){.ckpane{transition:none}}
+/* the timer's figures on the stopwatch's line: the words hang under them, outside the height that is centred */
+#tmSet{translate:0 3px}   /* its figures level with the stopwatch's */
+.ckf{position:relative}
+.ckf>.lbl{position:absolute;top:100%;left:50%;translate:-50% 0;margin-top:12px;font-size:calc(16px*var(--fs));letter-spacing:.16em;white-space:nowrap}
 .ckface{font-size:calc(104px*var(--fs));line-height:1;color:var(--ink);font-variant-numeric:lining-nums tabular-nums;min-height:1em}
 .ckface[hidden]{display:none}
 .ckface.done{color:var(--amber);animation:ckDone 1s ease-in-out infinite}
@@ -1734,7 +1801,7 @@ canvas{display:block;width:100%}
 .ckset{display:flex;align-items:flex-start;gap:6px}
 .ckset[hidden]{display:none}
 .ckf{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:text}
-.ckin{font:inherit;font-size:calc(96px*var(--fs));line-height:1;color:var(--ink);background:transparent;border:0;
+.ckin{font:inherit;font-size:calc(104px*var(--fs));line-height:1;color:var(--ink);background:transparent;border:0;
   border-bottom:1px solid var(--line2);width:1.5em;text-align:center;padding:0 0 4px;border-radius:0;
   font-variant-numeric:lining-nums tabular-nums}
 .ckin:hover{border-bottom-color:var(--ink3)}
@@ -1744,8 +1811,8 @@ canvas{display:block;width:100%}
 .ckin[readonly]{border-bottom-color:transparent;cursor:default}
 .ckset.done .ckin{color:var(--amber);animation:ckDone 1s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.ckset.done .ckin{animation:none}}
-.ckcol{font-size:calc(84px*var(--fs));line-height:1;color:var(--ink3);padding-top:4px}
-.clock .mtctl{margin-top:44px}
+.ckcol{font-size:calc(88px*var(--fs));line-height:1;color:var(--ink3);padding-top:4px}
+.clock .mtctl{margin-top:64px}
 @media (max-width:560px){
   .ckface{font-size:calc(72px*var(--fs))}
   .ckin{font-size:calc(60px*var(--fs))}
@@ -1812,6 +1879,28 @@ canvas{display:block;width:100%}
 .tabs .ti .tarc{opacity:0;transform-box:view-box;transform-origin:8px 3px}
 .tabs button.recording .ti .tarc{animation:tArc 1.4s ease-out infinite}
 @keyframes tArc{0%{opacity:0;transform:translateY(-.3px) scale(.6)}30%{opacity:1;transform:translateY(-1.9px) scale(.85)}100%{opacity:0;transform:translateY(-3.4px) scale(1.25)}}
+/* the tabs as one control: a sunken track, the open tab raised in it */
+nav.tabs{background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:3px;gap:3px;align-self:center}
+nav.tabs button{margin:0;padding:6px 14px;border-radius:5px;border:1px solid transparent;box-shadow:none;transition:color .2s ease,background .2s ease,border-color .2s ease,box-shadow .2s ease}
+nav.tabs button:hover{color:var(--ink);box-shadow:none}
+nav.tabs button[aria-selected="true"]{background:var(--hov);border-color:var(--line2);color:var(--tabon);box-shadow:0 1px 3px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04)}
+[data-theme="light"] nav.tabs button[aria-selected="true"]{box-shadow:0 1px 2px rgba(60,40,20,.18)}
+/* the row of tabs starts where the Record screen's staff box does, on every screen */
+@media (min-width:601px){ header.bar{padding-left:12px} }
+/* the header no taller for the track round the tabs: its padding gives back what the track adds */
+@media (min-width:601px) and (min-height:501px){ header.bar{padding-top:18px;padding-bottom:18px} }
+@media (max-width:600px){ header.bar{padding-top:7px;padding-bottom:5px} }
+@media (max-width:600px){ nav.tabs{padding:2px;gap:2px} nav.tabs button{padding:5px 2px} }
+/* the sliding square: the buttons sit over it, clear, and it goes where the choice is */
+.hasind{position:relative}
+.pzatabs.hasind{position:absolute}   /* the paused page's tabs keep their place across the column */
+.hasind>button{position:relative;z-index:1}
+.segind{position:absolute;left:0;top:0;z-index:0;box-sizing:border-box;border-radius:5px;background:var(--hov);border:1px solid var(--line2);
+  box-shadow:0 1px 3px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04);pointer-events:none;opacity:0;
+  transition:transform .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1),height .28s cubic-bezier(.4,0,.2,1),opacity .15s}
+[data-theme="light"] .segind{box-shadow:0 1px 2px rgba(60,40,20,.18)}
+.vsel.hasind>button[aria-pressed="true"],nav.tabs.hasind>button[aria-selected="true"]{background:transparent;border-color:transparent;box-shadow:none}
+@media (prefers-reduced-motion:reduce){.segind{transition:none}}
 @media (prefers-reduced-motion:reduce){.tabs .ti *{animation:none!important}.tabs button[data-tab="ana"].recording .ti .tarc{opacity:1;transform:translateY(-1.5px)}}
 /* without motion, a steady dot instead */
 @media (prefers-reduced-motion:reduce){
@@ -1930,7 +2019,7 @@ canvas{display:block;width:100%}
     </div>
     <div class="setrow">
       <div><span class="setl">Text size</span></div>
-      <div class="fsctl" role="group" aria-label="Text size">
+      <div class="fsctl stp" role="group" aria-label="Text size">
         <button type="button" class="btn fsb" id="fsDown" aria-label="Smaller text"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg></button>
         <input type="number" id="fsIn" value="12" min="8" max="20" step="1" aria-label="Text size">
         <button type="button" class="btn fsb" id="fsUp" aria-label="Larger text"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M8 3v10"/></svg></button>
@@ -1968,7 +2057,7 @@ canvas{display:block;width:100%}
     <div class="setrow">
       <div><label class="setl" for="aref">Reference A</label></div>
       <div class="roin">
-        <input type="number" id="aref" class="tab amber" value="440" min="330" max="500" step="0.1" aria-label="Reference A in hertz">
+        <div class="stp" data-step="1"><button type="button" class="stpb" data-d="-1" aria-label="One hertz lower"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg></button><input type="number" id="aref" class="tab amber" value="440" min="330" max="500" step="0.1" aria-label="Reference A in hertz"><button type="button" class="stpb" data-d="1" aria-label="One hertz higher"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M8 3v10"/></svg></button></div>
         <span>Hz</span>
       </div>
     </div>
@@ -2003,7 +2092,7 @@ canvas{display:block;width:100%}
   <header class="bar">
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
-        <button role="tab" data-tab="ana" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
+        <button role="tab" data-tab="ana" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5v6a2.5 2.5 0 0 0 5 0v-6M8 10v4M6 14h4"/><path class="tw1" d="M12.6 3.4c.7.9.7 2.3 0 3.2M3.4 3.4c-.7.9-.7 2.3 0 3.2"/><path class="tw2" d="M14.4 2.2c1.2 1.6 1.2 4 0 5.6M1.6 2.2c-1.2 1.6-1.2 4 0 5.6"/></svg>Record</button>
         <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
@@ -2141,7 +2230,7 @@ canvas{display:block;width:100%}
   <header class="bar">
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
-        <button role="tab" data-tab="ana" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
+        <button role="tab" data-tab="ana" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5v6a2.5 2.5 0 0 0 5 0v-6M8 10v4M6 14h4"/><path class="tw1" d="M12.6 3.4c.7.9.7 2.3 0 3.2M3.4 3.4c-.7.9-.7 2.3 0 3.2"/><path class="tw2" d="M14.4 2.2c1.2 1.6 1.2 4 0 5.6M1.6 2.2c-1.2 1.6-1.2 4 0 5.6"/></svg>Record</button>
         <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
@@ -2277,7 +2366,7 @@ canvas{display:block;width:100%}
   <header class="bar">
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
-        <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
+        <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5v6a2.5 2.5 0 0 0 5 0v-6M8 10v4M6 14h4"/><path class="tw1" d="M12.6 3.4c.7.9.7 2.3 0 3.2M3.4 3.4c-.7.9-.7 2.3 0 3.2"/><path class="tw2" d="M14.4 2.2c1.2 1.6 1.2 4 0 5.6M1.6 2.2c-1.2 1.6-1.2 4 0 5.6"/></svg>Record</button>
         <button role="tab" data-tab="met" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
@@ -2313,7 +2402,7 @@ canvas{display:block;width:100%}
     <div class="mtsubw">
       <span class="lbl mtlbl">Subdivision</span>
       <div class="mtsubs" role="group" aria-label="Subdivision">
-        <input type="number" class="mtsubn" id="mtSubN" value="0" min="0" max="16" step="1" aria-label="Clicks per beat, 0 for none">
+        <div class="stp" data-skip="1"><button type="button" class="stpb" data-d="-1" aria-label="One click fewer"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg></button><input type="number" class="mtsubn" id="mtSubN" value="0" min="0" max="16" step="1" aria-label="Clicks per beat, 0 for none"><button type="button" class="stpb" data-d="1" aria-label="One click more"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M8 3v10"/></svg></button></div>
         <div class="mtslide">
           <input type="range" class="mtrange" id="mtSubR" min="0" max="5" step="1" value="0" aria-label="Subdivision preset">
           <div class="mtticks" id="mtTicks" aria-hidden="true"></div>
@@ -2337,7 +2426,7 @@ canvas{display:block;width:100%}
   <header class="bar">
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
-        <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
+        <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5v6a2.5 2.5 0 0 0 5 0v-6M8 10v4M6 14h4"/><path class="tw1" d="M12.6 3.4c.7.9.7 2.3 0 3.2M3.4 3.4c-.7.9-.7 2.3 0 3.2"/><path class="tw2" d="M14.4 2.2c1.2 1.6 1.2 4 0 5.6M1.6 2.2c-1.2 1.6-1.2 4 0 5.6"/></svg>Record</button>
         <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="rhy" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="4" cy="12.6" rx="2.2" ry="1.6"/><ellipse cx="11.6" cy="11.1" rx="2.2" ry="1.6"/><path d="M6.2 12.4V3.6l7.6-1.6v9"/><path d="M6.2 6.3l7.6-1.6"/></svg>Rhythm</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
@@ -2384,7 +2473,7 @@ canvas{display:block;width:100%}
   <header class="bar">
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
-        <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
+        <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5v6a2.5 2.5 0 0 0 5 0v-6M8 10v4M6 14h4"/><path class="tw1" d="M12.6 3.4c.7.9.7 2.3 0 3.2M3.4 3.4c-.7.9-.7 2.3 0 3.2"/><path class="tw2" d="M14.4 2.2c1.2 1.6 1.2 4 0 5.6M1.6 2.2c-1.2 1.6-1.2 4 0 5.6"/></svg>Record</button>
         <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
@@ -2419,7 +2508,7 @@ canvas{display:block;width:100%}
   <header class="bar">
     <div class="bar-l">
       <nav class="tabs" role="tablist" aria-label="Section">
-        <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.75" y="1.5" width="4.5" height="8" rx="2.25"/><path d="M3.25 7.5a4.75 4.75 0 0 0 9.5 0M8 12.25v2.25M5.5 14.5h5"/><path class="tarc" d="M4.4 3.6A4.2 4.2 0 0 1 11.6 3.6"/></svg>Record</button>
+        <button role="tab" data-tab="ana" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 1.5v6a2.5 2.5 0 0 0 5 0v-6M8 10v4M6 14h4"/><path class="tw1" d="M12.6 3.4c.7.9.7 2.3 0 3.2M3.4 3.4c-.7.9-.7 2.3 0 3.2"/><path class="tw2" d="M14.4 2.2c1.2 1.6 1.2 4 0 5.6M1.6 2.2c-1.2 1.6-1.2 4 0 5.6"/></svg>Record</button>
         <button role="tab" data-tab="met" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.5h3.6L13 14.5H3z"/><path class="tpend" d="M8 11.5V3.7"/></svg>Metronome</button>
         <button role="tab" data-tab="drn" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h2.5l3.5-3v10l-3.5-3H1.5z"/><path class="tw1" d="M10 5.5a3.5 3.5 0 0 1 0 5"/><path class="tw2" d="M12 3.5a6 6 0 0 1 0 9"/></svg>Drone</button>
         <button role="tab" data-tab="clk" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path class="thm" d="M8 8V4.6"/><path class="thh" d="M8 8l2.4 1.5"/></svg>Clock</button>
@@ -2430,7 +2519,7 @@ canvas{display:block;width:100%}
   <div class="metro clock">
     <div class="vsel cksel" id="ckMode" role="group" aria-label="Clock">
       <button type="button" data-v="sw" aria-pressed="true"><svg class="cki" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="9.2" r="5.3"/><path d="M8 9.2V6.4M6.6 1.8h2.8M8 1.8v2.1M12.2 4.6l1-1"/></svg>Stopwatch</button>
-      <button type="button" data-v="tm" aria-pressed="false"><svg class="cki" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.8h8M4 14.2h8M5 1.8c0 3 3 4.2 3 6.2s-3 3.2-3 6.2M11 1.8c0 3-3 4.2-3 6.2s3 3.2 3 6.2"/></svg>Timer</button>
+      <button type="button" data-v="tm" aria-pressed="false"><svg class="cki" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.8 1.8h8.4M3.8 14.2h8.4M5.2 1.8C4.5 5.4 7.6 6.2 8 8c-.4 1.8-3.5 2.6-2.8 6.2M10.8 1.8c.7 3.6-2.4 4.4-2.8 6.2.4 1.8 3.5 2.6 2.8 6.2"/></svg>Timer</button>
     </div>
     <!-- both panes in one place, as tall as the taller, so the buttons do not move between them -->
     <div class="ckpanes">
@@ -5760,6 +5849,61 @@ document.querySelectorAll(".tabs button").forEach(b=>{
    one clock, through a single level on the page, so the metronome's and the
    drone's tabs pulse together however far apart they were started - and a
    screen coming back into view does not restart its tabs out of step. */
+/* ---- The chosen one's square slides ----
+   One square per set of choices, behind its buttons, moved (eased, about a quarter of a second) to whichever is
+   chosen; placed at once while the set cannot be seen, and when its screen comes up, from the tab that was left. */
+function segInd(box,attr){
+  if(box._ind) return;
+  const ind=document.createElement("i"); ind.className="segind"; ind.setAttribute("aria-hidden","true");
+  box.prepend(ind); box.classList.add("hasind"); box._ind=ind;
+  const sel=()=>[...box.children].find(b=>b.tagName==="BUTTON"&&b.getAttribute(attr)==="true"&&!b.hidden);
+  const put=(b,anim)=>{
+    if(!b||!box.offsetWidth||!b.offsetWidth){ ind.style.opacity="0"; return false; }
+    if(!anim) ind.style.transition="none";
+    ind.style.opacity="1"; ind.style.width=b.offsetWidth+"px"; ind.style.height=b.offsetHeight+"px";
+    ind.style.transform="translate("+b.offsetLeft+"px,"+b.offsetTop+"px)";
+    if(!anim){ void ind.offsetWidth; ind.style.transition=""; }
+    return true;
+  };
+  new MutationObserver(()=>put(sel(),true)).observe(box,{subtree:true,attributes:true,attributeFilter:[attr,"hidden"]});
+  const ro=new ResizeObserver(()=>{
+    const s=sel(), f=box._from;
+    if(f&&box.offsetWidth){ box._from=null; if(put(f,false)){ requestAnimationFrame(()=>requestAnimationFrame(()=>put(s,true))); return; } }
+    put(s,false);
+  });
+  ro.observe(box); for(const b of box.children) if(b.tagName==="BUTTON") ro.observe(b);
+  put(sel(),false);
+}
+function segIndAll(){
+  document.querySelectorAll("nav.tabs:not(.hasind)").forEach(n=>segInd(n,"aria-selected"));
+  document.querySelectorAll(".vsel:not(.hasind)").forEach(v=>segInd(v,"aria-pressed"));
+}
+segIndAll(); setInterval(segIndAll,1000);   // sets of choices made later (the paused page's tabs) get theirs too
+// a new screen: its row of tabs starts with the square under the tab that was open, and slides from there
+{ const s0=setView; setView=function(v){
+    const cur=document.querySelector(".view.on nav.tabs button[aria-selected='true']"), k=cur&&cur.dataset.tab;
+    if(k) document.querySelectorAll("nav.tabs").forEach(n=>{ if(!n.closest(".view.on")) n._from=n.querySelector('button[data-tab="'+k+'"]'); });
+    return s0.apply(this,arguments); }; }
+
+/* ---- Steppers: − and + a step at a time; held, they run, quicker the longer ---- */
+document.querySelectorAll(".stpb").forEach(b=>{
+  const w=b.parentElement, inp=w.querySelector("input"), d=+b.dataset.d, st=+(w.dataset.step||inp.step||1);
+  const go=()=>{ const mn=inp.min===""? -1e9 : +inp.min, mx=inp.max===""? 1e9 : +inp.max;
+    let v=(+inp.value||0)+d*st; if(w.dataset.skip!=null&&v===+w.dataset.skip) v+=d*st;   // Subdivision: 1 is the same as none
+    v=Math.max(mn,Math.min(mx,Math.round(v/st)*st));
+    inp.value=String(+v.toFixed(3)); inp.dispatchEvent(new Event("input",{bubbles:true})); inp.dispatchEvent(new Event("change",{bubbles:true})); };
+  let t=0;
+  b.addEventListener("click",e=>{ e.preventDefault(); if(b._held){ b._held=false; return; } go(); });
+  b.addEventListener("pointerdown",()=>{ b._held=false; clearTimeout(t); let k=0; t=setTimeout(function rep(){ b._held=true; go(); t=setTimeout(rep,Math.max(45,130-(k++)*8)); },420); });
+  for(const ev of ["pointerup","pointerleave","pointercancel"]) b.addEventListener(ev,()=>clearTimeout(t));
+});
+/* ---- Volume faders: the gold reaches the cap, wherever the value is set from ---- */
+{ const D=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value");
+  const upd=el=>{ const mn=+el.min||0, mx=+el.max||100; el.style.setProperty("--f",String(Math.max(0,Math.min(1,((+D.get.call(el))-mn)/((mx-mn)||1))))); };
+  for(const id of ["mtVol","drVol","erVol","pbVol"]){ const el=$(id); if(!el) continue; el.classList.add("fader");
+    Object.defineProperty(el,"value",{configurable:true,get(){ return D.get.call(this); },set(v){ D.set.call(this,v); upd(this); }});
+    el.addEventListener("input",()=>upd(el)); upd(el); } }
+
 /* ========================================================================
    Clock: a stopwatch, and a timer that buzzes when its time is up
    ===================================================================== */
@@ -6186,21 +6330,45 @@ function mtTap(){
    in the box that matches a preset lights that preset. */
 /* The slider's stops. 0 is no subdivision - just the beat - which the
    scheduler counts as one click per beat. */
-/* A slider with stops that still slides: the thumb follows the finger rather than jumping stop to stop, the value
-   is the nearest stop (cb hears each new one), and on letting go - or an arrow key - the thumb glides onto it. */
+/* A slider with stops that moves stop to stop, smoothly: the finger picks the nearest stop and the thumb does not
+   follow it - each time the finger passes halfway to another stop, the thumb eases over onto that one, speeding up
+   and then slowing (a spring that settles without overshoot, about a fifth of a second), taking up from wherever it
+   has got to if the stop changes again on the way. cb hears each new stop. Clicks on the track, arrow keys and values
+   set from elsewhere (rangeTo) move it the same way. */
 function smoothRange(r,cb){
-  const mn=+r.min||0, mx=+r.max, idx=()=>Math.min(mx,Math.max(mn,Math.round(+r.value)));
-  let last=idx(); r.step="any";
-  const fire=()=>{ const i=idx(); if(i!==last){ last=i; cb(i); } };
-  r.addEventListener("pointerdown",()=>{ r._drag=true; last=idx(); });
-  r.addEventListener("input",fire);
-  r.addEventListener("change",()=>{ r._drag=false; fire(); rangeGlide(r,idx()); });
+  const mn=+r.min||0, mx=+r.max, cl=v=>Math.min(mx,Math.max(mn,Math.round(v)));
+  r.step="any";
+  const M={pos:+r.value, vel:0, tgt:cl(+r.value), raf:0, t:0, last:cl(+r.value)};
+  const W=26;   // the spring's speed: settled in about 0.18 s
+  // a two-ended slider: the shaded stretch between its thumbs goes with them
+  const show=v=>{ r.value=String(v); const d=r.closest(".erdual"); if(d){ const [x,y]=d.querySelectorAll("input"), fl=d.querySelector(".erdtrack i"); if(x&&y&&fl) erDual(+x.value,+y.value,fl.id,+x.min,+x.max); } };
+  const run=now=>{
+    const dt=Math.min(0.032,Math.max(0.001,(now-M.t)/1000)); M.t=now;
+    const acc=W*W*(M.tgt-M.pos)-2*W*M.vel; M.vel+=acc*dt; M.pos+=M.vel*dt;
+    if(Math.abs(M.tgt-M.pos)<0.003&&Math.abs(M.vel)<0.05){ M.pos=M.tgt; M.vel=0; }
+    show(M.pos);
+    M.raf= M.pos!==M.tgt||M.vel? requestAnimationFrame(run) : 0; r._gl=M.raf;
+  };
+  const to=(v,quiet)=>{
+    v=cl(v);
+    if(!quiet&&v!==M.last){ M.last=v; cb(v); } else if(quiet) M.last=v;
+    if(v===M.tgt&&(M.raf||M.pos===v)) return;
+    M.tgt=v;
+    if(matchMedia("(prefers-reduced-motion: reduce)").matches){ cancelAnimationFrame(M.raf); M.raf=0; M.pos=v; M.vel=0; show(v); return; }
+    if(!M.raf){ M.t=performance.now(); M.raf=requestAnimationFrame(run); r._gl=M.raf; }
+  };
+  r._sm={to:v=>to(v,true), at:()=>M.tgt};
+  r.addEventListener("pointerdown",()=>{ r._drag=true; if(!M.raf){ M.pos=+r.value; M.vel=0; } });
+  // the browser has put the thumb under the finger: take the stop it is nearest, put the thumb back where it was
+  r.addEventListener("input",()=>{ const want=+r.value; show(M.pos); to(want); });
+  r.addEventListener("change",()=>{ r._drag=false; show(M.pos); });
+  for(const ev of ["pointerup","pointercancel","lostpointercapture"]) r.addEventListener(ev,()=>{ r._drag=false; });
   r.addEventListener("keydown",e=>{
-    const d={ArrowRight:1,ArrowUp:1,ArrowLeft:-1,ArrowDown:-1}[e.key]; if(!d) return;
+    const d={ArrowRight:1,ArrowUp:1,ArrowLeft:-1,ArrowDown:-1,PageUp:3,PageDown:-3}[e.key];
+    const h={Home:mn,End:mx}[e.key];
+    if(!d&&h===undefined) return;
     e.preventDefault();
-    const from=+r.value, to=Math.min(mx,Math.max(mn,idx()+d));
-    if(to!==last){ last=to; cb(to); }
-    r.value=String(from); rangeGlide(r,to);
+    to(h!==undefined? h : M.tgt+d);
   });
 }
 function rangeGlide(r,to){
@@ -6210,7 +6378,7 @@ function rangeGlide(r,to){
   r._gl=requestAnimationFrame(f);
 }
 /* Setting a smooth slider from elsewhere: left alone while the finger is on it at that stop. */
-function rangeTo(r,v){ if(r._drag&&Math.round(+r.value)===v) return; cancelAnimationFrame(r._gl||0); r.value=String(v); }
+function rangeTo(r,v){ if(r._sm){ r._sm.to(v); return; } if(r._drag&&Math.round(+r.value)===v) return; cancelAnimationFrame(r._gl||0); r.value=String(v); }
 const MT_STOPS=[1,2,3,4,6,8];
 const subLabel=n=> n<=1? 0 : n;
 function mtSetSub(v){
@@ -6800,7 +6968,7 @@ fxStart();
    on a 32-unit square: round-ended strokes of one width. */
 const FAV_ICONS={
   fork:"<path d='M11 3v12a5 5 0 0 0 10 0v-12M16 20v8M12 28h8'/>",
-  met:"<path d='M12.5 3h7l6.5 26.5H6z'/><path d='M16 22.5l7.5-14'/>",
+  met:"<path d='M12.5 3h7l6.5 26.5H6z'/><path d='M16 23V7.4'/>",
   drn:"<path d='M3 12h5.5l7.5-6.5v21l-7.5-6.5H3z'/><path d='M21 11.5a6.5 6.5 0 0 1 0 9M25.5 7.5a12 12 0 0 1 0 17'/>",
   clk:"<circle cx='16' cy='16' r='13'/><path d='M16 8.5V16l5 3'/>"
 };
@@ -9207,6 +9375,7 @@ function laneFix(key,tr,src){
 }
 function drawLanes(cv,keys,src,opt){
   const NOW0=!!(opt&&opt.now0);   // the Staff layout's column: the pitch now only, no trail
+  if(cv.id==="lvNow"&&!cv.clientWidth) return;   // hidden: drawn when it shows (lvRulerRedo)
   if(!Array.isArray(keys)) keys=[keys];
   const {c,w,h}=fit(cv);
   if(!c) return;
@@ -10469,6 +10638,7 @@ function pbPlay(){
 function pbToggle(){
   if(PB.on||PB.want){ pbStop(); return; }
   if(PB.at>=S.dur-0.02) PB.at=0;
+  if(PSC.on&&(PB.at<PSC.t0-0.01||PB.at>=PSC.t1-0.02)) PB.at=PSC.t0;
   pbPlay();
 }
 /* Move to a point in the take. Playing carries on from there; stopped stays
@@ -10491,6 +10661,7 @@ function pbReset(){
 }
 function pbTick(){
   if(!PB.on) return;
+  if(PSC.on&&pbPos()>=PSC.t1){ pbStop(); PB.at=PSC.t0; pbPaint(); return; }
   pbPaint();
   PB.raf=requestAnimationFrame(pbTick);
 }
@@ -11996,7 +12167,7 @@ function stEv(){ ST_OFF=0; return S.staff; }
    share close enough - within 10 cents, or on Rhythm within 30 ms. */
 function stripVals(p){
   const RH= p==="rhy"&&RG.ok&&RG.dev;
-  const v= RH? [...RG.dev.values()] : (S.notes||[]).map(n=>n.cents).filter(isFinite), lim= RH? 30 : 10;
+  const v= RH? [...RG.dev].filter(([k])=>pscIn(S.notes[k])).map(([,ms])=>ms) : (S.notes||[]).filter(pscIn).map(n=>n.cents).filter(isFinite), lim= RH? 30 : 10;
   return {mean: v.length? Math.round(v.reduce((a,c)=>a+Math.abs(c),0)/v.length)+(RH? " ms" : " \u00A2") : NA,
     inn: v.length? Math.round(100*v.filter(c=>Math.abs(c)<lim).length/v.length)+" %" : NA, lbl: RH? "Within 30ms" : "Within 10 &cent;"};
 }
@@ -12377,7 +12548,7 @@ const IPL_GLIDE=0.6;
 const IP_CHEV=`<svg class="ipchev" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg>`;
 function ipSide(){
   const RH= ANA.page==="rhy"&&RG.ok&&RG.dev, U= RH? "ms" : "¢", band= RH? rBand : centsBand;
-  const V= RH? [...RG.dev].map(([k,ms])=>({k,name:nm(S.notes[k]),cents:ms})) : voices(), el=$("ipList");
+  const V=(RH? [...RG.dev].map(([k,ms])=>({k,name:nm(S.notes[k]),cents:ms})) : voices()).filter(v=>pscIn(S.notes[v.k])), el=$("ipList");
   if(!V.length){ el.innerHTML=`<p class="pgnote">No notes to show.</p>`; return; }
   const groups=new Map();
   for(const v of V){ if(!groups.has(v.name)) groups.set(v.name,[]); groups.get(v.name).push(v); }
@@ -12805,7 +12976,7 @@ function lvStaffDraw(N){
    and the share within 10 cents */
 function lvSumPaint(N){
   const a=$("lvMean"), b=$("lvIn"); if(!a||!b) return;
-  const v=N.map(n=>n.cents).filter(isFinite);
+  const v=N.filter(pscIn).map(n=>n.cents).filter(isFinite);
   a.textContent= v.length? Math.round(v.reduce((s,c)=>s+Math.abs(c),0)/v.length)+" \u00A2" : NA;
   b.textContent= v.length? Math.round(100*v.filter(c=>Math.abs(c)<10).length/v.length)+" %" : NA;
 }
@@ -13053,6 +13224,128 @@ function pzaExit(st){
     was=key; return d1.apply(this,arguments);
   };
 }
+/* ---- Paused: a passage picked on the staff ----
+   Pressed on a note and dragged to another: the notes from the one to the other stay lit and the rest fade back,
+   a thin gold bar at each end; the totals, the Intonation and Rhythm lists and the player go by those notes alone.
+   A double click on the staff (or Escape, or Record) lets it go. A plain click on a note still takes the player
+   there; while a passage is picked a click off the notes does not resume, so a double click cannot. */
+var PSC={on:false,t0:0,t1:0,drag:null,swallow:0};
+function pscIn(n){ return !PSC.on||!n||(n.t0>=PSC.t0-0.005&&n.t1<=PSC.t1+0.005); }
+function pscAna(){ return $("lvBox").classList.contains("pzst")&&!!S.notes; }
+function pscNoteAt(el){
+  if(!el||!el.closest) return null;
+  if(pscAna()){ const g=el.closest("#staffSvg [data-k]"); return g? S.notes[+g.dataset.k]||null : null; }
+  const g=el.closest('#lvStaffSvg [data-lk^="n"]'); if(!g||g.classList.contains("lvout")) return null;
+  return lvDrawn().find(n=>"n"+n.key===g.dataset.lk)||null;
+}
+function pscTops(svg){ return [...svg.querySelectorAll("[data-k]")].filter(e=>!e.parentElement.closest("[data-k]")); }
+function pscPaint(){
+  const live=$("lvStaffSvg"), ana=$("staffSvg");
+  if(live){ const M=new Map(lvDrawn().map(n=>["n"+n.key,n]));
+    live.querySelectorAll('[data-lk^="n"]').forEach(g=>g.classList.toggle("psdim",PSC.on&&!pscIn(M.get(g.dataset.lk)))); }
+  if(ana&&S.notes) pscTops(ana).forEach(e=>{ e.classList.add("psk"); e.classList.toggle("psdim",PSC.on&&!pscIn(S.notes[+e.dataset.k])); });
+  $("lvBox").classList.toggle("pson",PSC.on);
+  const A=pscAna(), svg= A? ana : live;
+  for(const x of [live,ana]) if(x&&(x!==svg||!PSC.on)) x.querySelectorAll(".psbarg").forEach(g=>g.remove());
+  if(!PSC.on||!svg){ PSC.shown=false; return; }
+  // the bars: before the first picked note and after the last, the height of the staff they are on and a little over
+  const els= A? pscTops(svg).filter(e=>!e.classList.contains("psdim")).map(e=>({e,n:S.notes[+e.dataset.k]}))
+              : (()=>{ const M=new Map(lvDrawn().map(n=>["n"+n.key,n])); return [...svg.querySelectorAll('[data-lk^="n"]')].filter(g=>!g.classList.contains("psdim")&&!g.classList.contains("lvout")).map(e=>({e,n:M.get(e.dataset.lk)})); })();
+  const sel=els.filter(x=>x.n); if(!sel.length) return;
+  const rectOf=n=>{ let L=1e9,R=-1e9,T=1e9,B=-1e9; for(const x of sel) if(x.n===n){ const r=(x.e.querySelector(".hd")||x.e).getBoundingClientRect(); if(!r.width&&!r.height) continue; L=Math.min(L,r.left); R=Math.max(R,r.right); T=Math.min(T,r.top); B=Math.max(B,r.bottom); } return L<R? {L,R,T,B} : null; };
+  const first=sel.reduce((a,x)=>x.n.t0<a.n.t0? x : a), last=sel.reduce((a,x)=>x.n.t1>a.n.t1? x : a);
+  PSC.first=first.n; PSC.last=last.n;
+  const rowOf=pscRows(svg);
+  const M=svg.getScreenCTM(); if(!M) return; const inv=M.inverse(), P=(x,y)=>new DOMPoint(x,y).matrixTransform(inv);
+  const put=(side,x,rc)=>{
+    const r=rowOf((rc.T+rc.B)/2), y0= r? r[0]-20 : rc.T-16, y1= r? r[1]+20 : rc.B+16, p0=P(x,y0), p1=P(x,y1);
+    let g=svg.querySelector('.psbarg[data-s="'+side+'"]');
+    if(!g){ g=document.createElementNS("http://www.w3.org/2000/svg","g"); g.setAttribute("class","psbarg"+(PSC.shown? " now" : "")); g.dataset.s=side;
+      g.innerHTML='<title>Drag to move this end</title><line class="psbar"/><line class="pshit"/>';
+      g.style.transition="none"; g.style.transform="translateX("+p0.x+"px)"; svg.appendChild(g); void g.getBoundingClientRect(); g.style.transition=""; }
+    else if(g!==svg.lastElementChild&&g.nextElementSibling&&!g.nextElementSibling.classList.contains("psbarg")) svg.appendChild(g);
+    for(const l of g.querySelectorAll("line")){ l.setAttribute("x1",0); l.setAttribute("x2",0); l.setAttribute("y1",p0.y); l.setAttribute("y2",p1.y); }
+    g.style.transform="translateX("+p0.x+"px)";
+  };
+  const r0=rectOf(first.n), r1=rectOf(last.n);
+  if(r0) put("L",r0.L-7,r0); if(r1) put("R",r1.R+7,r1);
+  PSC.shown=true;
+}
+/* The staff's rows (five lines each), and the row nearest a height on the screen. */
+function pscRows(svg){
+  const ls=[...svg.querySelectorAll(".stl")].map(l=>l.getBoundingClientRect().top).sort((a,b)=>a-b), rows=[];
+  for(let i=0;i+4<ls.length;i+=5) rows.push([ls[i],ls[i+4]]);
+  return y=>{ let b=null,d=1e9; for(const r of rows){ const c=(r[0]+r[1])/2, dd=Math.abs(c-y); if(dd<d){ d=dd; b=r; } } return b; };
+}
+/* Every note on the staff in view, with where its head is: for moving an end of the passage to the note nearest
+   the pointer, on the row the pointer is over. */
+function pscAll(){
+  const A=pscAna(), svg= A? $("staffSvg") : $("lvStaffSvg"); if(!svg) return [];
+  const M= A? null : new Map(lvDrawn().map(n=>["n"+n.key,n]));
+  const els= A? pscTops(svg).map(e=>({e,n:S.notes[+e.dataset.k]})) : [...svg.querySelectorAll('[data-lk^="n"]')].filter(g=>!g.classList.contains("lvout")).map(e=>({e,n:M.get(e.dataset.lk)}));
+  return els.filter(x=>x.n).map(x=>{ const r=(x.e.querySelector(".hd")||x.e).getBoundingClientRect(); return {n:x.n,cx:(r.left+r.right)/2,cy:(r.top+r.bottom)/2,ok:r.width>0||r.height>0}; }).filter(x=>x.ok);
+}
+function pscNearest(x,y){
+  const all=pscAll(); if(!all.length) return null;
+  const svg= pscAna()? $("staffSvg") : $("lvStaffSvg"), rowOf=pscRows(svg), row=rowOf(y);
+  const on= row? all.filter(a=>rowOf(a.cy)===row) : all;
+  let b=null; for(const a of (on.length? on : all)) if(!b||Math.abs(a.cx-x)<Math.abs(b.cx-x)) b=a;
+  return b&&b.n;
+}
+function pscStats(){
+  try{ lvSumPaint(lvDrawn()); }catch(err){}
+  if(window.PZA&&PZA.on){ try{ stripPaint(); pzaSum(); if(ANA.page==="int"||ANA.page==="rhy") ipSide(); }catch(err){} }
+}
+function pscSet(t0,t1){
+  if(PSC.on&&Math.abs(PSC.t0-t0)<1e-4&&Math.abs(PSC.t1-t1)<1e-4) return;
+  PSC.on=true; PSC.t0=t0; PSC.t1=t1;
+  if(PB.on&&(pbPos()<t0||pbPos()>=t1)) pbStop();
+  if(!PB.on){ PB.at=t0; pbPaint(); }
+  pscPaint(); pscStats();
+}
+function pscClear(){ if(!PSC.on) return; PSC.on=false; pscPaint(); pscStats(); }
+function pscPlayMark(){ const b=$("lvBox"); if(b) b.classList.toggle("psplay",!!(PB.on||PB.want)); }
+{ const t0=pbToggle; pbToggle=function(){ const r=t0.apply(this,arguments); pscPlayMark(); return r; }; }
+{ const s0=pbStop; pbStop=function(){ const r=s0.apply(this,arguments); pscPlayMark(); return r; }; }
+{ const box=$("lvBox");
+  box.addEventListener("pointerdown",e=>{
+    const g=e.target.closest&&e.target.closest(".psbarg");
+    if(!g||!PSC.on||!(LV&&LV.paused)||e.button!==0) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    PSC.edge={side:g.dataset.s, anchor: g.dataset.s==="L"? PSC.last : PSC.first, moved:false};
+    g.classList.add("drag"); box.classList.add("psdrag");
+  },true);
+  window.addEventListener("pointermove",e=>{
+    const D=PSC.edge; if(!D||!D.anchor) return;
+    const n=pscNearest(e.clientX,e.clientY); if(!n) return;
+    D.moved=true;
+    pscSet(Math.min(D.anchor.t0,n.t0),Math.max(D.anchor.t1,n.t1));
+  });
+  window.addEventListener("pointerup",()=>{ const D=PSC.edge; if(!D) return; PSC.edge=null; box.classList.remove("psdrag"); document.querySelectorAll(".psbarg.drag").forEach(g=>g.classList.remove("drag")); PSC.swallow=performance.now(); });
+  box.addEventListener("pointerdown",e=>{
+    if(!(LV&&LV.paused)||e.button!==0||e.target.closest(".sndel")) return;
+    const n=pscNoteAt(e.target); if(!n) return;
+    PSC.drag={a:n,b:n,moved:false};
+  },true);
+  window.addEventListener("pointermove",e=>{
+    const D=PSC.drag; if(!D) return;
+    const n=pscNoteAt(document.elementFromPoint(e.clientX,e.clientY));
+    if(!n||n===D.b) return;
+    D.b=n; if(n!==D.a){ D.moved=true; box.classList.add("psdrag"); }
+    if(D.moved) pscSet(Math.min(D.a.t0,D.b.t0),Math.max(D.a.t1,D.b.t1));
+  });
+  window.addEventListener("pointerup",()=>{ const D=PSC.drag; PSC.drag=null; box.classList.remove("psdrag"); if(D&&D.moved) PSC.swallow=performance.now(); });
+  // the click that ends a drag picks nothing; with a passage picked, a click off the notes does not resume the take
+  box.addEventListener("click",e=>{
+    if(performance.now()-PSC.swallow<400){ e.stopImmediatePropagation(); e.preventDefault(); return; }
+    if(PSC.on&&LV&&LV.paused&&!pscNoteAt(e.target)&&!e.target.closest("#lvFollow")){ e.stopImmediatePropagation(); }
+  },true);
+  box.addEventListener("dblclick",()=>{ if(PSC.on) pscClear(); });
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&PSC.on&&LV&&LV.paused) pscClear(); });
+}
+// redrawn staffs keep it
+{ const d0=drawStaff; drawStaff=function(){ const r=d0.apply(this,arguments); if(PSC.on) pscPaint(); return r; }; }
+{ const l0=lvStaffDraw; lvStaffDraw=function(){ const r=l0.apply(this,arguments); if(PSC.on) pscPaint(); return r; }; }
 function lvPlaySlot(){
   let el=$("lvPlay");
   if(!el){ el=document.createElement("div"); el.className="lvplay"; el.id="lvPlay"; el.innerHTML='<div class="lvpin"></div>'; $("lvBox").after(el); }
@@ -13082,7 +13375,7 @@ async function lvPlayOpen(){
   setTimeout(()=>{ if(LV===L&&L.paused) pzaStart(L,buf); },700);     // and Analyze, quietly, on the take so far - once the player is in (together they stuttered)
 }
 function lvPlayClose(){
-  ++LVP.tok;
+  ++LVP.tok; PSC.drag=null; if(PSC.on){ PSC.on=false; try{ pscPaint(); pscStats(); }catch(err){} }
   if(!LVP.open&&!LVP.saved) return;
   const was=LVP.open; LVP.open=false;
   pbStop(); lvPlayCur(true);
@@ -13098,9 +13391,14 @@ function lvPlayClose(){
 /* The ruler beside the staff, while the paused take plays: as it was at that moment of the take - the readings kept
    then (LV.hall), the same span the ruler reads live, one array kept and refilled so it scrolls as it did */
 const LVP_HS=[];
-function lvPlayRuler(){
-  const nc=$("lvNow"), A=LV&&LV.hall; if(!nc||!A||!(PB.on||PB.at>0)) return;
-  const now=pbPos(), from=now-LV_SPAN-1;
+function lvRulerRedo(){
+  const nc=$("lvNow"); if(!nc||!nc.clientWidth||!LV) return;
+  try{ if(window.LVP&&LVP.open) lvPlayRuler(true); else if(curView==="vMain") drawLive(); }catch(err){}
+}
+function lvPlayRuler(force){
+  const nc=$("lvNow"), A=LV&&LV.hall; if(!nc||!A||!A.length||!(force||PB.on||PB.at>0)) return;
+  // not yet played back: the pitch where the take stopped, as it was showing
+  const now= PB.on||PB.at>0? pbPos() : A[A.length-1].t, from=now-LV_SPAN-1;
   let lo=0, hi=A.length; while(lo<hi){ const m=(lo+hi)>>1; if(A[m].t<from) lo=m+1; else hi=m; }
   let a=lo, b=A.length; while(a<b){ const m=(a+b)>>1; if(A[m].t<=now) a=m+1; else b=m; }
   LVP_HS.length=0; for(let i=lo;i<a;i++) LVP_HS.push(A[i]);
@@ -13437,6 +13735,8 @@ new MutationObserver(lvBtnHome).observe($("lvBox"),{attributes:true,attributeFil
     add.forEach(t=>{ try{ ss.insertRule(t,ss.cssRules.length); }catch(err){} });
   }
   { const side=document.createElement("aside"); side.className="lvside"; side.innerHTML='<div class="lvsl"><canvas id="lvNow"></canvas></div><div class="lvsd"><div class="lvr lvr1"><span class="c0"><i class="lvslot" data-id="lvNote"></i><span class="dsl">&thinsp;/&thinsp;</span><i class="lvslot" data-id="lvNote2"></i></span><div class="st"><span class="lbl">Vibrato rate</span><i class="lvslot" data-id="lvVib"></i></div><div class="st"><span class="lbl">Vibrato depth</span><i class="lvslot" data-id="lvDep"></i></div><div class="st"><span class="lbl">Dynamic</span><i class="lvslot" data-id="lvLvl"></i></div></div><div class="lvr lvr2"><span class="c0"></span><div class="st"><span class="lbl">Vibrato rate</span><i class="lvslot" data-id="lvVib2"></i></div><div class="st"><span class="lbl">Vibrato depth</span><i class="lvslot" data-id="lvDep2"></i></div><div class="st"><span class="lbl">Dynamic</span><i class="lvslot" data-id="lvLvl2"></i></div></div><div class="lvbtn"><div class="lvr lvsum"><div class="st"><span class="lbl">Average Error</span><b class="num" id="lvMean">-</b></div><div class="st"><span class="lbl">Within 10 &cent;</span><b class="num" id="lvIn">-</b></div></div></div></div>'; $("lvBox").closest(".split").appendChild(side); }
+  // the ruler beside the staff drawn again whenever it changes size or comes into view, so it is never stretched
+  if(window.ResizeObserver&&$("lvNow")){ let w0=-1,h0=-1; new ResizeObserver(()=>{ const c=$("lvNow"); if(!c||(c.clientWidth===w0&&c.clientHeight===h0)) return; w0=c.clientWidth; h0=c.clientHeight; lvRulerRedo(); }).observe($("lvNow")); }
   if(!window.VC_PHONE) lvBgWarm();     // the staff's note model built ahead, while idle (not on a phone)
   lvSlots(true);
   try{ localStorage.removeItem("sonoscope.liveDisplay"); localStorage.removeItem("sonoscope.liveDisplayV2"); }catch(err){}
@@ -13966,6 +14266,7 @@ const VC_UI=[
   [["auto pause","auto pause on","(turn on|switch on|use|enable) [the] auto pause","(wait for me|follow me|only click when i play)"], ()=>()=>mtAutoSet(true)],
   [["auto pause off","(turn off|switch off|disable|stop) [the] auto pause","(always click|click all the time|don't wait for me)"], ()=>()=>mtAutoSet(false)],
   [["reload","(reload|refresh) [the] (page|app)","(update|get the new version)"], ()=> !$("updNote").hidden? ()=>location.reload() : null],
+  [["(clear|remove|drop) [the] selection","(select|show) all [the] notes","deselect"], ()=> PSC.on? ()=>pscClear() : null],
   [["save [the] (take|recording)","save (it|this|this take)","keep (it|this take)","export [the] (take|recording)","export (it|this|this take)","export"], ()=> S.buf&&(!LV||(window.PZA&&PZA.on))? ()=>$("tkSave").click() : null],
   [["(on|turn on|turn it on|switch on|switch it on)"], ()=> vcOnRes()? ()=>{ if(!PB.on) pbToggle(); } : vcStartHere("start")],
   [["(off|turn off|turn it off|switch off|switch it off)"], ()=>vcStopHere()],
