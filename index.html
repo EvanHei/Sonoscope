@@ -4001,7 +4001,7 @@ function noteName(m){
    SC_DROP, passing between them, is a slide and goes, its time to the note before. Bach cello recordings: found 88.3%
    unchanged, right 96.4 -> 96.3%; MusicNet cello unchanged (74.0/80.4%); the player's Eb scales, notes off the key:
    18 -> 2, 9 -> 2, 7 -> 0, 7 -> 5, 1 -> 0, 1 -> 0 (2026-11-15, with keySnap after it). */
-let SC_USE=true; const SC_DUR=0.16, SC_DROP=0.09, SC_SHARE=0.34, SC_R=6, SC_STEP=0.8, SC_KR=10, SC_MG=1;
+let SC_USE=true; const SC_DUR=0.16, SC_DROP=0.09, SC_SHARE=0.34, SC_R=6, SC_STEP=0.8, SC_KR=10, SC_MG=1, SC_GAP=0.08, SC_SCOOP=0.12;
 function scaleClean(N){
   if(!SC_USE||!N||N.length<8) return N;
   const SEV=[[0,2,4,5,7,9,11],[0,2,3,5,7,8,10]], in7=(m,K)=>SEV[K.minor?1:0].includes((((m-K.pc)%12)+12)%12);
@@ -4034,6 +4034,19 @@ function scaleClean(N){
       else if(m.dur<SC_DROP&&m.target>lo&&m.target<hi){ gone.add(r); const pv=r>i&&!gone.has(r-1)? N[r-1] : P; pv.t1=m.t1; pv.dur=pv.t1-pv.t0; }
     }
     i=j;
+  }
+  // a quick note popping out past a step and straight back (C D Bb for C Bb), and a quick mistuned scoop into a
+  // phrase's first note from a step away: the hand or the bow on its way, not notes
+  for(let i=0;i<N.length;i++){
+    const n=N[i]; if(n.second||gone.has(i)||n.dur>=SC_DUR) continue;
+    let p=i-1; while(p>=0&&gone.has(p)) p--; const P=p>=0? N[p] : null, Q=N[i+1];
+    const nearP=P&&n.t0-P.t1<=SC_GAP, nearQ=Q&&Q.t0-n.t1<=SC_GAP;
+    if(nearP&&nearQ&&!P.second&&!Q.second&&P.dur>=2*n.dur&&Q.dur>=2*n.dur){
+      const st=Math.abs(Q.target-P.target), lo=Math.min(P.target,Q.target), hi=Math.max(P.target,Q.target);
+      if(st>=1&&st<=2&&(n.target>hi||n.target<lo)&&Math.max(n.target-hi,lo-n.target)<=3&&gate(i,key[i])){ gone.add(i); P.t1=n.t1; P.dur=P.t1-P.t0; continue; }
+    }
+    if(!nearP&&nearQ&&!Q.second&&n.dur<SC_SCOOP&&Q.dur>=3*n.dur&&Math.abs(Q.target-n.target)<=2&&Q.target!==n.target&&Math.abs(n.cents||0)>=25&&gate(i,key[i])){
+      gone.add(i); Q.t0=n.t0; Q.dur=Q.t1-Q.t0; }
   }
   return gone.size? N.filter((_,i)=>!gone.has(i)) : N;
 }
@@ -13613,7 +13626,7 @@ async function lvMatch(c,midi,voiced,ft){
 }
 // what the staff writes: the matched notes, and any found since
 /* ---- slides ---- */
-const GL_MAX=0.25, GL_TRAVEL=0.6, GL_STEP_MAX=0.08, GL_HELD=0.2, GL_GAP=0.08, GL_SLOW=0.5, GL_JUMP=0.6, GL_PASS=0.3, GL_STEP=5;
+const GL_MAX=0.25, GL_TRAVEL=0.6, GL_STEP_MAX=0.08, GL_HELD=0.2, GL_GAP=0.08, GL_SLOW=0.5, GL_JUMP=0.6, GL_PASS=0.3, GL_STEP=5, GL_SIT=0.15;
 // a note's readings moving the whole way: their first third to their last by GL_TRAVEL or more, one way, no step back
 // worth the name - the way it moves (1 up, -1 down), else 0. The trained model's track (SwiftF0) follows a slide;
 // the tracker's snaps to the notes
@@ -13631,6 +13644,8 @@ function glMv(m0){
 // the trained model's track over t0-t1 as fractional notes (G: {hz,conf} every 16 ms)
 function glSf(G,aref,t0,t1){ const r=[]; if(!G) return r; for(let j=Math.ceil(t0/0.016);j<t1/0.016&&j<G.hz.length;j++) r.push(G.conf[j]>=0.5&&G.hz[j]>0? 69+12*Math.log2(G.hz[j]/aref) : NaN); return r; }
 // pitchAt(t0,t1): the pitch track's readings over that stretch, as fractional notes
+// readings sitting on note t (within a third of a semitone) for GL_SIT straight: a note held, not one slid through
+function glSit(m,t){ let r=0; for(const v of m){ r= isFinite(v)&&Math.abs(v-t)<=0.33? r+1 : 0; if(r*0.016>=GL_SIT) return true; } return false; }
 function glideOut(N,pitchAt){
   if(!N||N.length<2) return N;
   const out=[], P=N.map(n=>{
@@ -13650,6 +13665,7 @@ function glideOut(N,pitchAt){
     while(!done&&k+1<N.length&&near2(N[k],N[k+1])&&!N[k+1].second){
       const st=N[k+1].target-N[k].target; if(Math.sign(st)!==dir||Math.abs(st)>GL_STEP) break;
       if(k>a&&dur(N[k])>=GL_SLOW) break;     // a note held this long is not passed through
+      if(k>a&&glSit(N[k].gtr||pitchAt(N[k].t0,N[k].t1),N[k].target)) break;   // nor one the pitch sits on
       k++;
       const H1=N[k]; if(k<a+2||dur(H1)<GL_HELD||Math.abs(H1.target-H0.target)<2) continue;
       const trk=q=> q.gtr||pitchAt(q.t0,q.t1), mid=N.slice(a+1,k).flatMap(trk);
