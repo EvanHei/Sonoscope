@@ -280,7 +280,6 @@ try{ if(localStorage.getItem("sonoscope.theme")==="light") document.documentElem
   --c2:#D6B84A;
   --c3:#D98A3E;
   --c4:#C9524A;
-  --c5:#2796DB;
   --hov:#2A241E;            /* a picked or hovered row */
   --hov2:#241F1A;           /* a hovered button */
   --tab:#C9BFB1;
@@ -315,7 +314,6 @@ try{ if(localStorage.getItem("sonoscope.theme")==="light") document.documentElem
   --c2:#A88617;
   --c3:#C0661C;
   --c4:#B83A32;
-  --c5:#1F80BB;
   --hov:#E6DDCF;
   --hov2:#EEE7DC;
   --tab:#5F554A;
@@ -1096,9 +1094,9 @@ canvas{display:block;width:100%}
 .stat .lbl{display:block;margin-bottom:6px}
 .stat b{font-weight:400;font-size:calc(36px*var(--fs));line-height:1}
 .cb0{color:var(--c0)}.cb1{color:var(--c1)}.cb2{color:var(--c2)}
-.cb3{color:var(--c3)}.cb4{color:var(--c4)}.cb5{color:var(--c5)}
+.cb3{color:var(--c3)}.cb4{color:var(--c4)}
 .bg0{background:var(--c0)}.bg1{background:var(--c1)}.bg2{background:var(--c2)}
-.bg3{background:var(--c3)}.bg4{background:var(--c4)}.bg5{background:var(--c5)}
+.bg3{background:var(--c3)}.bg4{background:var(--c4)}
 /* ---------- Analyze: its pages ----------
    Highlights first: a card over the lanes and the staff that steps through
    the take's biggest problems. Take is the take as before. Intonation and
@@ -5571,10 +5569,8 @@ function takeStamp(){
 }
 /* Signed cents, as markup: the sign in its own fixed slot, the magnitude after
    it. See .sg - written straight, the number moves every time the sign flips. */
-// cents or ms shown: within ZT of 0 read as 0 (dead in tune / on time, its own colour), else to the nearest whole
-const ZT=0.7, rd0=v=>Math.abs(v)<=ZT? 0 : Math.round(v);
 const sgnHTML=v=>{
-  const r=rd0(v);
+  const r=Math.round(v);
   return '<span class="sg">'+(r>0?"+":r<0?"\u2212":"")+"</span>"+Math.abs(r);
 };
 const MID="·";
@@ -8032,7 +8028,7 @@ function liveFrame(){
   for(const id of ["lvNote","lvNote2"]){ const e=$(id); if(e) mo.observe(e,{childList:true,characterData:true,subtree:true}); }
   pairPaint(); }
 function noteCol(el,c){
-  for(let i=0;i<=5;i++) el.classList.remove("cb"+i);
+  for(let i=0;i<CBAND.length;i++) el.classList.remove("cb"+i);
   if(isFinite(c)) el.classList.add("cb"+centsBand(c));
 }
 /* The single-note reading eased the way the double-stop rails ease theirs, so
@@ -9178,8 +9174,8 @@ function dashed(c,x1,y,x2,pat,col){
 /* What the canvases draw with, per theme: the ink, the halo behind text
    (the trace's ground), and the cents bands. */
 const THEMES={
-  dark:{ink:"239,231,218",halo:"26,23,20",bands:["70,160,95","138,197,110","214,184,74","217,138,62","201,82,74"],zero:"39,150,219"},
-  light:{ink:"43,36,29",halo:"251,248,243",bands:["46,138,75","92,154,63","168,134,23","192,102,28","184,58,50"],zero:"31,128,187"}
+  dark:{ink:"239,231,218",halo:"26,23,20",bands:["70,160,95","138,197,110","214,184,74","217,138,62","201,82,74"]},
+  light:{ink:"43,36,29",halo:"251,248,243",bands:["46,138,75","92,154,63","168,134,23","192,102,28","184,58,50"]}
 };
 let TH=THEMES.dark;
 const CBAND=[
@@ -9189,10 +9185,7 @@ const CBAND=[
   {lim:20,       rgb:"217,138,62",  wash:0.07 },  // orange
   {lim:Infinity, rgb:"201,82,74",   wash:0.05 },  // red
 ];
-// band 5: dead in tune (0 as shown, whole cents), its own colour (bandOf)
-const CZ={rgb:"39,150,219"}; function bandOf(i){ return i===5? CZ : CBAND[i]; }
 function centsBand(v){
-  if(rd0(v)===0) return 5;
   const a=Math.abs(v);
   for(let i=0;i<CBAND.length;i++) if(a<CBAND[i].lim) return i;
   return CBAND.length-1;
@@ -9235,7 +9228,7 @@ function strokeBanded(c,pts){
   let run=[],band=-1;
   const flush=()=>{
     if(run.length>1&&band>=0){
-      c.strokeStyle="rgb("+bandOf(band).rgb+")";
+      c.strokeStyle="rgb("+CBAND[band].rgb+")";
       c.beginPath();
       run.forEach((p,i)=> i? c.lineTo(p.x,p.y) : c.moveTo(p.x,p.y));
       c.stroke();
@@ -9309,25 +9302,25 @@ function liveName(m){
    the short hyphen. */
 function laneSlot(c){ return Math.max(c.measureText("+").width,c.measureText("-").width)+1; }
 function laneLabel(c,m,ct,x,y,base,halo){
-  const rc=rd0(ct), sg= rc>0? "+" : rc<0? "-" : "", cs=Math.abs(rc)+" ¢";
+  const rc=Math.round(ct), sg= rc>0? "+" : rc<0? "-" : "", cs=Math.abs(rc)+" ¢";
   const nm=liveName(m), gap=c.measureText(nm).width+7, sw=laneSlot(c);
   const sx=x+gap+sw-1-c.measureText(sg).width, nx=x+gap+sw;
   c.textAlign="left"; c.textBaseline=base;
   if(halo){ c.lineWidth=4; c.strokeStyle="rgba("+TH.halo+",0.9)"; c.strokeText(nm,x,y); if(sg) c.strokeText(sg,sx,y); c.strokeText(cs,nx,y); }
   c.fillStyle="rgba("+TH.ink+",0.85)"; c.fillText(nm,x,y);
-  c.fillStyle="rgb("+bandOf(centsBand(ct)).rgb+")"; if(sg) c.fillText(sg,sx,y); c.fillText(cs,nx,y);
+  c.fillStyle="rgb("+CBAND[centsBand(ct)].rgb+")"; if(sg) c.fillText(sg,sx,y); c.fillText(cs,nx,y);
 }
 /* The width laneLabel will take, in the canvas's current font. */
 /* The ruler's label: the cents only, signed, in the cents colour - no note name */
 function laneCents(c,m,ct,x,y,base,halo){
-  const rc=rd0(ct), sg= rc>0? "+" : rc<0? "-" : "", cs=Math.abs(rc)+" ¢", sw=laneSlot(c);
+  const rc=Math.round(ct), sg= rc>0? "+" : rc<0? "-" : "", cs=Math.abs(rc)+" ¢", sw=laneSlot(c);
   const sx=x+sw-1-c.measureText(sg).width, nx=x+sw;
   c.textAlign="left"; c.textBaseline=base;
   if(halo){ c.lineWidth=4; c.strokeStyle="rgba("+TH.halo+",0.9)"; if(sg) c.strokeText(sg,sx,y); c.strokeText(cs,nx,y); }
-  c.fillStyle="rgb("+bandOf(centsBand(ct)).rgb+")"; if(sg) c.fillText(sg,sx,y); c.fillText(cs,nx,y);
+  c.fillStyle="rgb("+CBAND[centsBand(ct)].rgb+")"; if(sg) c.fillText(sg,sx,y); c.fillText(cs,nx,y);
 }
 function laneLabelW(c,m,ct){
-  return c.measureText(liveName(m)).width+7+laneSlot(c)+c.measureText(Math.abs(rd0(ct))+" ¢").width;
+  return c.measureText(liveName(m)).width+7+laneSlot(c)+c.measureText(Math.abs(Math.round(ct))+" ¢").width;
 }
 /* The pitch as the lanes show it: steadier than the raw track. A note holds
    on until the pitch is LANE_HYS of a semitone away from it, so a note played
@@ -9569,7 +9562,7 @@ function drawLanes(cv,keys,src,opt){
     if(live){
       const P=live.pts.length>8? live.pts.slice(3) : live.pts;
       const ct=(P.reduce((s,q)=>s+q.v,0)/P.length-live.k)*100;
-      c.save(); c.lineWidth=1.8; c.shadowColor="rgb("+bandOf(centsBand(ct)).rgb+")"; c.shadowBlur=14;
+      c.save(); c.lineWidth=1.8; c.shadowColor="rgb("+CBAND[centsBand(ct)].rgb+")"; c.shadowBlur=14;
       strokeBanded(c,live.pts); strokeBanded(c,live.pts);
       c.restore();
     }
@@ -9615,7 +9608,7 @@ function drawLanes(cv,keys,src,opt){
   if(NOW0) for(const t of tracks){
     const pd=t.pend, q=t[t.length-1], hd= pd&&(!q||pd[0].t>q.t)? {...pd[pd.length-1],pend:1} : q;
     if(!hd||now-hd.t>=0.2) continue;
-    const ct=(hd.v-hd.k)*100, y=Y(hd.v), col="rgb("+bandOf(centsBand(ct)).rgb+")";
+    const ct=(hd.v-hd.k)*100, y=Y(hd.v), col="rgb("+CBAND[centsBand(ct)].rgb+")";
     c.save(); if(hd.pend) c.globalAlpha=0.5;
     c.strokeStyle=col; c.lineWidth=2; c.lineCap="round"; c.shadowColor=col; c.shadowBlur=12;
     c.beginPath(); c.moveTo(NOWX-10,y); c.lineTo(NOWX+10,y); c.stroke(); c.restore();
@@ -9737,7 +9730,7 @@ function drawLiveOn(cv,keys){
       const txt=(v>0?"+":"")+v.toFixed(1);
       c.lineWidth=4; c.strokeStyle="rgba("+TH.halo+",0.9)";  // halo, to read over the trace
       c.strokeText(txt,NOWX+9,ys[i]);
-      c.fillStyle="rgb("+bandOf(Math.abs(v)<0.05? 5 : centsBand(Math.abs(v)<0.5? Math.sign(v)*0.6 : v)).rgb+")";   // 0 as shown to a tenth
+      c.fillStyle="rgb("+CBAND[centsBand(v)].rgb+")";
       c.fillText(txt,NOWX+9,ys[i]);
     });
     c.restore();
@@ -10088,7 +10081,7 @@ function sigW(k,from){
 }
 function setTheme(t){
   TH=THEMES[t]||THEMES.dark;
-  CBAND.forEach((b,i)=>b.rgb=TH.bands[i]); CZ.rgb=TH.zero;
+  CBAND.forEach((b,i)=>b.rgb=TH.bands[i]);
   if(t==="light") document.documentElement.dataset.theme="light"; else delete document.documentElement.dataset.theme;
   try{ localStorage.setItem("sonoscope.theme",t); }catch(err){}
   document.querySelectorAll("#themeSel button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===t?"true":"false"));
@@ -10097,12 +10090,12 @@ function setTheme(t){
   lscDraw(true);
   dispatchEvent(new Event("resize"));
 }
-function bandFill(c){ return !isFinite(c)? "var(--ink3)" : "rgb("+bandOf(centsBand(c)).rgb+")"; }
+function bandFill(c){ return isFinite(c)? "rgb("+CBAND[centsBand(c)].rgb+")" : "var(--ink3)"; }
 /* On the Rhythm page the staff's notes are coloured and numbered by how early
    or late each started, in milliseconds (h.ms, set by drawStaff); elsewhere
    by cents. The five colours as for cents, at 15, 30, 50 and 80 ms. */
 let ST_RHY=false, ST_SC=1;   // ST_SC: the staff's drawn scale (under 1 in the paused staff's place)
-function msFill(ms){ return isFinite(ms)? "rgb("+bandOf(rBand(ms)).rgb+")" : "var(--ink3)"; }
+function msFill(ms){ return isFinite(ms)? "rgb("+CBAND[rBand(ms)].rgb+")" : "var(--ink3)"; }
 function stFill(h){ return ST_RHY? msFill(h.ms) : bandFill(h.cents); }
 /* How wide a staff cents number is drawn, for hanging its sign beside it. */
 let STC_CTX=null;
@@ -10113,7 +10106,7 @@ function stcW(s){
 }
 function centsTxt(c){
   if(!isFinite(c)) return NA;
-  const r=rd0(c);
+  const r=Math.round(c);
   return r>0? "+"+r : r<0? "−"+(-r) : "0";
 }
 
@@ -11176,7 +11169,7 @@ function rsSelect(k,seek){
   // a double stop: its interval, how far from pure
   const pu=dsPure(N[k],true);
   $("rsIvRow").hidden=!pu;
-  if(pu){ const d=rd0(pu.dev); $("rsIvName").textContent=PURE_NAME[pu.iv]||"Interval";
+  if(pu){ const d=Math.round(pu.dev); $("rsIvName").textContent=PURE_NAME[pu.iv]||"Interval";
     $("rsIv").innerHTML= d===0? cbSpan("pure",0) : cbSpan(Math.abs(d)+" ¢ "+(d>0?"wide":"narrow"),pu.dev); }
   // played other than written, in a matched passage
   $("rsWrongRow").hidden=N[k].xWrong==null;
@@ -11545,7 +11538,7 @@ function onsets(N){
   });
 }
 const RBAND=[15,30,50,80];
-function rBand(ms){ if(rd0(ms)===0) return 5; const a=Math.abs(ms); for(let i=0;i<RBAND.length;i++) if(a<RBAND[i]) return i; return 4; }
+function rBand(ms){ const a=Math.abs(ms); for(let i=0;i<RBAND.length;i++) if(a<RBAND[i]) return i; return 4; }
 // + late, − early
 const msTxt=ms=> sgn(ms)+" ms";
 
@@ -12628,7 +12621,7 @@ function cbar(c,span,band){
   const st= c>=0? `left:50%;width:${w}%` : `left:${50-w}%;width:${w}%`;
   return `<div class="ibar zones"><i class="bg${(band||centsBand)(c)}" style="${st}"></i></div>`;
 }
-const sgn=c=>{ const r=rd0(c); return (r>0?"+":r<0?"\u2212":"")+Math.abs(r); };
+const sgn=c=>{ const r=Math.round(c); return (r>0?"+":r<0?"\u2212":"")+Math.abs(r); };
 
 /* ========================================================================
    Intonation: the per-note averages in the sidebar
@@ -12923,7 +12916,7 @@ function lvMeter(sfx,m,c){
     el.classList.remove("off");
     if(isFinite(c)){ LVM.tgt[sfx]=clamp(c,-50,50); el.lastElementChild.style.background=bandFill(c);
       // the cents over the bar, signed, as the lanes write them
-      const r=rd0(c); $("lvCt"+sfx).textContent=(r>0? "+" : r<0? "−" : "")+Math.abs(r); }
+      const r=Math.round(c); $("lvCt"+sfx).textContent=(r>0? "+" : r<0? "−" : "")+Math.abs(r); }
   }
   if(!LVM.raf&&lay2On()){ LVM.t=performance.now(); LVM.raf=requestAnimationFrame(lvMeterFrame); }
 }
