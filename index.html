@@ -397,7 +397,11 @@ body{
 #recClock[hidden]{display:none}
 /* in the lanes box, at its top left, over the trace */
 /* reading the take: three grey dots in a row, each rising and settling in turn */
-#lvSpin{position:absolute;top:10px;left:8px;z-index:4;display:flex;gap:5px;padding:12px 9px 6px;border-radius:6px;background:var(--sunk);box-shadow:0 0 10px 4px var(--sunk);pointer-events:none}
+#lvSpin{position:absolute;top:10px;left:8px;z-index:4;display:flex;gap:5px;padding:12px 9px 6px;pointer-events:none}
+/* behind the dots and the clock: a soft shade with no edge or corner, the staff's ground blurred out */
+#lvSpin::after,#lvBox>#recClock::after{content:"";position:absolute;z-index:-1;border-radius:50%;background:var(--sunk);filter:blur(9px);opacity:.95;pointer-events:none}
+#lvSpin::after{inset:2px -2px -4px}
+#lvBox>#recClock::after{inset:-6px -10px -6px -8px}
 #lvSpin[hidden]{display:none}
 #lvSpin i{width:6px;height:6px;border-radius:50%;background:var(--ink3);animation:lvDot 1.3s ease-in-out infinite}
 /* gold as it rises, most at the top of the hop */
@@ -1749,6 +1753,8 @@ input.fader:focus-visible{outline:1px solid var(--amber);outline-offset:4px}
 .mtplay[aria-pressed="false"] .i-pause{display:none}
 .mtplay[aria-pressed="true"] .i-play{display:none}
 .mtplay.wait{opacity:.55}   /* Auto Pause waiting for the playing */
+/* Auto Pause on: it runs the metronome, so the button is out of play - greyed and still */
+.mtplay:disabled,.mtplay:disabled:hover{opacity:.3;filter:grayscale(1);cursor:default;border-color:var(--ink3);background:transparent;color:var(--ink3)}
 /* Tap is pressed in time, over and over: a big target, and it answers on the
    way down rather than on release, so the beat it hears is the beat played. */
 .mttap{
@@ -5444,6 +5450,7 @@ function setView(v){
   // played against together.
   if(!isTool(v)) drStop();
   if(v==="vResults") mtStop();
+  if(v==="vMet"&&MTA.on&&!MT.on) mtStart();   // Auto Pause: listening for the playing whenever its tab is open
   if(!isTool(v)) lastAna=v;
   if(BZ.on) $("busy").classList.toggle("away",v!==BZ.view);
   const from=VIEWS.find(id=>$(id).classList.contains("on"));
@@ -6204,10 +6211,10 @@ $("mtVol").addEventListener("input",()=>{
    plainly part of the same sound, plainly not the beat. The first beat of a
    counted bar is the same click a fifth higher and a little louder.
    `kind`: 2 the bar's first beat, 1 a beat, 0 a sub-beat. */
-function mtClick(t,kind,bi){
+function mtClick(t,kind,bi,grid){
   const c=ac(), out=mtBus();
   const nodes=mtVoice(c,out,t,kind), g=mtGain();
-  MT.q.push({t,nodes,main:kind>0,bi,k:kind,g});
+  MT.q.push({t,nodes,main:kind>0,bi,k:kind,g,...(grid? {gb:MT.beat,gi:MT.idx} : null)});
   // a take being recorded keeps a note of every click, to take them out again
   if(LV&&!LV.paused&&LV.mr) LV.clicks.push({t,k:kind,g});
 }
@@ -6230,6 +6237,13 @@ function mtVoice(c,out,t,kind){
   return nodes;
 }
 /* Take back every click still waiting from `from` on. */
+/* Auto Pause's stop: the waiting clicks taken back, and the grid wound back to the first of them - so the beats go on
+   counting through the quiet, silent, and playing again within the second they were queued for still clicks on time. */
+function mtaStop(from){
+  let first=null; for(const n of MT.q) if(n.t>=from&&n.gb!=null&&(!first||n.t<first.t)) first=n;
+  mtFlush(from);
+  if(first){ MT.beat=first.gb; MT.idx=first.gi; MT.bi=first.bi; }
+}
 function mtFlush(from){
   const keep=[];
   for(const n of MT.q){
@@ -6248,24 +6262,34 @@ function mtPump(){
     const t=MT.beat+MT.idx*spb/n;
     if(t<now&&!(quiet&&now-t<2)){ MT.beat=now+0.03; MT.idx=0; continue; }       // after a stall
     if(t>=now+(quiet? 0.03 : MT_AHEAD)) break;
-    if(!quiet) mtClick(t, MT.idx>0? 0 : MT.bar>1&&mtInBar(MT.bi)===0? 2 : 1, MT.bi);
+    if(!quiet) mtClick(t, MT.idx>0? 0 : MT.bar>1&&mtInBar(MT.bi)===0? 2 : 1, MT.bi, true);
     if(++MT.idx>=n){ MT.idx=0; MT.beat+=spb; MT.bi++; }
   }
 }
-/* Auto Pause: the clicks only while something is being played. The mic is heard from 60 to 880 Hz, where the
-   click has nothing (its lowest partial is 937 Hz) and a bowed note has its body, so the metronome never hears
-   itself. Against the room's own level: in at 12 dB over it, held while within 6 dB of that, and out after a
-   second and a half (or two beats) with nothing. Started, it waits for the first note. */
-const MT_AUTO_KEY="ma.metronome.auto", MTA_LO=60, MTA_HI=880, MTA_IN=7, MTA_HOLD=4, MTA_MIN=-72, MTA_ROOM=80;
-const MTA={on:false, open:false, last:-1e9, floor:NaN, room:[], hit:0, src:null, an:null, buf:null, stream:null, wiring:false};
+/* Auto Pause: the clicks only while something is being played. The mic is heard from 60 to 4000 Hz - the whole of a
+   cello's or violin's top notes too - and for a moment after each click (MTA_CW, plus the speaker's delay) without
+   that click's own pitches (MTA_NW either side), so the metronome never keeps itself going. Against the room's own
+   level: in at MTA_IN dB over it; out once it has been under the room + MTA_QUIET for MTA_STOP seconds - the bow off
+   the string, the strings left ringing well under that. The player's takes stopped 0.1 s after the last note with no
+   stop while playing (2026-11-18); 0.12 s gaps between notes, never 0.15. Started, it waits for the first note. */
+const MT_AUTO_KEY="ma.metronome.auto", MTA_LO=60, MTA_HI=4000, MTA_IN=7, MTA_QUIET=8, MTA_STOP=0.15, MTA_CW=0.25, MTA_NW=0.08, MTA_DROP=25, MTA_MIN=-72, MTA_ROOM=80;
+/* The first note: while waiting, the mic's level over the last 512 samples (about 10 ms) is read every 5 ms, and two
+   readings in a row MTA_GO dB over the room start the beat there and then - the click on the attack, not after it.
+   14 dB lets a knock on the instrument pass; on the player's takes it fired 10 ms before to 30 ms after the note's
+   start as the analysis puts it (2026-11-18). A soft start under that is still found by the slower reading. */
+const MTA_GO=14, MTA_GOHIT=2, MTA_GOROOM=400;
+const MTA={on:false, open:false, last:-1e9, q:0, t:0, lv:[], an2:null, b2:null, fast:0, groom:[], gfloor:NaN, ghit:0, floor:NaN, room:[], hit:0, src:null, an:null, buf:null, stream:null, wiring:false};
 function mtaQuiet(now){
   if(!MTA.on||!MT.on) return false;
   const A=MTA;
   if(!A.an||A.stream!==MIC||!MIC||!MIC.getAudioTracks().some(t=>t.readyState==="live")){ mtaWire(); return !A.open; }
   A.an.getFloatFrequencyData(A.buf);
   const hz=ac().sampleRate/A.an.fftSize;
-  let p=0; for(let k=Math.ceil(MTA_LO/hz);k<=Math.floor(MTA_HI/hz);k++) p+=Math.pow(10,A.buf[k]/10);
-  const db=10*Math.log10(p+1e-20);
+  // a click just played (heard after the speaker's delay): its pitches out of the reading
+  const cw=MTA_CW+(ac().outputLatency||0), F=[];
+  for(const n of MT.q) if(n.t<=now&&now<n.t+cw){ const m= n.k===2? 1.5 : n.k===1? 1 : 0.75; F.push(1250*m,2500*m); }
+  let p=0, pn=0; for(let k=Math.ceil(MTA_LO/hz);k<=Math.floor(MTA_HI/hz);k++){ const v=Math.pow(10,A.buf[k]/10); p+=v; if(!F.some(f=>Math.abs(k*hz/f-1)<=MTA_NW)) pn+=v; }
+  const db=10*Math.log10(p+1e-20), dbN=10*Math.log10(pn+1e-20), dt=A.t? Math.min(0.1,Math.max(0,now-A.t)) : 0.025; A.t=now;
   // the room: learnt only while waiting, from readings that are not themselves a start of playing; its level
   // (A.floor) the one 9 readings in 10 of the last two seconds stay under. Not ready until it has heard a little.
   const loud= isFinite(A.floor)? db>A.floor+MTA_IN : db>MTA_MIN+14;
@@ -6275,10 +6299,17 @@ function mtaQuiet(now){
   }
   if(!A.open){
     A.hit= loud&&db>MTA_MIN? A.hit+1 : 0;
-    if(A.hit>=2){ A.open=true; A.last=now; mtaPaint(); }
+    if(A.hit>=2) mtaGo(now);
   }else{
-    if((isFinite(A.floor)? db>A.floor+MTA_HOLD : db>MTA_MIN+8)&&db>MTA_MIN-6) A.last=now;
-    if(now-A.last>Math.max(1.5,2*60/mtBpm())){ A.open=false; A.hit=0; mtFlush(now+0.005); mtaPaint(); }
+    // quiet: under the room + MTA_QUIET; just after a click, read without the click (still sounding there: playing;
+    // not: no telling, so the count holds)
+    // the room not heard yet (playing from the start): MTA_DROP under the playing of the last two seconds
+    if(!F.length&&!isFinite(A.floor)&&db>MTA_MIN){ A.lv.push(db); if(A.lv.length>MTA_ROOM) A.lv.shift(); }
+    const lim= isFinite(A.floor)? A.floor+MTA_QUIET : A.lv.length>=8? A.lv.slice().sort((a,b)=>a-b)[A.lv.length>>1]-MTA_DROP : MTA_MIN+8;
+    if(F.length){ if(dbN>=lim) A.q=0; }
+    else if(db<lim) A.q+=dt; else A.q=0;
+    if(A.q<1e-9) A.last=now;
+    if(A.q>=MTA_STOP){ A.open=false; A.hit=0; A.q=0; mtaStop(now+0.005); mtaPaint(); }
   }
   return !A.open;
 }
@@ -6291,6 +6322,8 @@ async function mtaWire(){
     A.src=c.createMediaStreamSource(m); A.an=c.createAnalyser();
     A.an.fftSize=2048; A.an.smoothingTimeConstant=0;
     A.src.connect(A.an); A.buf=new Float32Array(A.an.frequencyBinCount); A.stream=m;
+    A.an2=c.createAnalyser(); A.an2.fftSize=512; A.src.connect(A.an2); A.b2=new Float32Array(512);
+    clearInterval(A.fast); A.fast=setInterval(mtaFast,5);
   }catch(err){
     // no mic: the plain metronome, and the switch says why
     mtAutoSet(false); $("mtAuto").dataset.tip="Needs the microphone";
@@ -6299,8 +6332,23 @@ async function mtaWire(){
 function mtaUnwire(keepMic){
   const A=MTA;
   try{ if(A.src) A.src.disconnect(); }catch(err){}
-  A.src=A.an=A.buf=A.stream=null; A.floor=NaN; A.room=[]; A.hit=0;
+  clearInterval(A.fast); A.fast=0;
+  A.src=A.an=A.buf=A.stream=A.an2=A.b2=null; A.floor=NaN; A.room=[]; A.hit=0; A.groom=[]; A.gfloor=NaN; A.ghit=0;
   if(!keepMic&&!LV&&!(typeof VC!=="undefined"&&VC.on)) releaseMic();
+}
+// open: playing heard. The beat starts now - its first click straight away, the bar counted from it
+function mtaGo(now){
+  const A=MTA; A.open=true; A.last=now; A.q=0; A.lv=[]; A.hit=0; A.ghit=0;
+  mtFlush(now); MT.beat=now+0.004; MT.idx=0; MT.bi=0; MT.barNew=false;
+  mtaPaint();
+}
+function mtaFast(){
+  const A=MTA; if(!(A.on&&MT.on)||A.open||!A.an2) return;
+  A.an2.getFloatTimeDomainData(A.b2); let e=0; for(const v of A.b2) e+=v*v; const db=10*Math.log10(e/A.b2.length+1e-20);
+  const loud= isFinite(A.gfloor)&&db>A.gfloor+MTA_GO;
+  if(!loud){ A.groom.push(db); if(A.groom.length>MTA_GOROOM) A.groom.shift(); if(A.groom.length>=40){ const r=A.groom.slice().sort((a,b)=>a-b); A.gfloor=r[Math.floor(0.9*(r.length-1))]; } }
+  A.ghit= loud? A.ghit+1 : 0;
+  if(A.ghit>=MTA_GOHIT){ mtaGo(ac().currentTime); mtPump(); }
 }
 function mtaPaint(){ $("mtPlay").classList.toggle("wait",MTA.on&&MT.on&&!MTA.open); }
 function mtAutoSet(on){
@@ -6308,11 +6356,12 @@ function mtAutoSet(on){
   const w=$("mtAuto"); w.querySelector(".tsw").setAttribute("aria-checked",MTA.on?"true":"false");
   w.dataset.tip="Stops the metronome when you're not playing";
   try{ localStorage.setItem(MT_AUTO_KEY,MTA.on?"1":"0"); }catch(err){}
-  if(MT.on){
-    if(MTA.on){ MTA.open=false; MTA.hit=0; mtFlush(ac().currentTime+0.005); mtaWire(); }   // at once: quiet until playing is heard
-    else{ mtaUnwire(); MTA.open=false; }
+  if(MTA.on){
+    if(MT.on){ MTA.open=false; MTA.hit=0; mtFlush(ac().currentTime+0.005); mtaWire(); }   // at once: quiet until playing is heard
+    else if(curView==="vMet"&&navigator.userActivation&&navigator.userActivation.hasBeenActive) mtStart();
   }
-  mtaPaint();
+  else{ if(MT.on) mtStop(); mtaUnwire(); MTA.open=false; }
+  mtPaint();
 }
 $("mtAuto").querySelector(".tsw").addEventListener("click",()=>mtAutoSet(!MTA.on));
 $("mtAuto").querySelector(".pbtunel").addEventListener("click",()=>mtAutoSet(!MTA.on));
@@ -6385,11 +6434,12 @@ function mtLight(i){
 function mtPaint(){
   const b=$("mtPlay");
   b.setAttribute("aria-pressed",MT.on?"true":"false");
-  b.setAttribute("aria-label",MT.on?"Stop metronome":"Start metronome");
+  b.setAttribute("aria-label",MTA.on? "Auto Pause starts and stops the metronome" : MT.on?"Stop metronome":"Start metronome");
+  b.disabled=MTA.on;
   tabSounding("met",MT.on);
   if(typeof mtaPaint==="function") mtaPaint();
 }
-function mtToggle(){ MT.on? mtStop() : mtStart(); }
+function mtToggle(){ if(MTA.on) return; MT.on? mtStop() : mtStart(); }   // Auto Pause on: it runs the metronome
 
 /* Tap tempo. The tempo is read off the gaps between taps - the middle one of
    the last several, so one fumbled tap does not drag the reading. A pause of
@@ -6492,7 +6542,7 @@ function mtSetSub(v){
 })();
 smoothRange($("mtSubR"),i=>mtSetSub(MT_STOPS[i]));
 
-/* Beats per bar, on a slider like the subdivision's. Off counts no bar:
+/* Beats per bar, on a slider like the subdivision's. 1 counts no bar:
    every beat alike, one light. A change while the beat runs makes the next
    beat the first of the new bar. */
 const MT_BARS=[1,2,3,4,5,6,7], MT_BAR_KEY="ma.metronome.bar";
@@ -6501,7 +6551,7 @@ function mtSetBar(v){
   MT.bar=n;
   const r=$("mtBarR");
   rangeTo(r,MT_BARS.indexOf(n));
-  r.setAttribute("aria-valuetext", n<=1? "Off" : n+" beats per bar");
+  r.setAttribute("aria-valuetext", n<=1? "1 beat per bar" : n+" beats per bar");
   document.querySelectorAll("#mtBarTicks .mttick").forEach((t,i)=>t.classList.toggle("on",MT_BARS[i]===n));
   $("mtBeat").innerHTML=MT_BARS.slice(0,n).map((_,i)=>`<i${n>1&&i===0?' class="one"':""}></i>`).join("");
   MT.lit=-1;
@@ -6511,7 +6561,7 @@ function mtSetBar(v){
 (function(){
   const box=$("mtBarTicks"), n=MT_BARS.length-1;
   box.innerHTML=MT_BARS.map((v,i)=>
-    `<span class="mttick" style="--i:${i};--n:${n}"><i></i><b>${v<=1? "off" : v}</b></span>`).join("");
+    `<span class="mttick" style="--i:${i};--n:${n}"><i></i><b>${v}</b></span>`).join("");
 })();
 smoothRange($("mtBarR"),i=>mtSetBar(MT_BARS[i]));
 $("mtSubN").addEventListener("input",()=>{
