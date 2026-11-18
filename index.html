@@ -127,13 +127,16 @@ body.pza #vResults .bar-r .rbtns{display:flex;flex-direction:row;gap:10px}
 .vcov.on .vcmic{animation:vcIn .3s ease-out}
 .vcov.ok .vcmic{color:var(--c0);animation:vcPulse .55s ease-in-out}
 .vcov.bad .vcmic{color:var(--c4);animation:vcPulse .55s ease-in-out}
-.vcov.micgone .vcmic,.vcov.micgone .vctx,.vcov.micgone .vcoff{opacity:0}
+.vcov.micgone .vcmic,.vcov.micgone .vctx,.vcov.micgone .vcoff,.vcov.micgone .vcsw{opacity:0}
 /* the words heard, under the microphone: placed apart from it, so the microphone never moves as they come */
 .vctx{position:absolute;left:16px;right:16px;top:calc(50% + 74px);text-align:center;font-style:italic;font-size:calc(26px*var(--fs));line-height:1.3;color:var(--ink2);text-shadow:0 1px 10px rgba(0,0,0,.5);transition:opacity .25s ease}
 .vctx:empty{display:none}
 .dndov .vctx{font-style:normal}   /* a file's name, not words heard */
 /* voice commands off for now: a circle with an X */
-.vcoff{position:absolute;left:50%;top:calc(50% + 136px);transform:translateX(-50%);width:46px;height:46px;padding:0;border-radius:50%;border:1.5px solid var(--ink3);background:transparent;color:var(--ink2);cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center;transition:opacity .25s ease,color .15s,border-color .15s}
+/* the switch for voice commands themselves, under the words heard: off, they stay off (as in Settings) */
+.vcsw{position:absolute;left:50%;top:calc(50% + 156px);transform:translateX(-50%);display:flex;align-items:center;gap:9px;pointer-events:auto;transition:opacity .25s ease}
+.vcsw .pbtunel{color:var(--ink2);text-shadow:0 1px 10px rgba(0,0,0,.5)}
+.vcoff{position:absolute;left:50%;top:calc(50% + 206px);transform:translateX(-50%);width:46px;height:46px;padding:0;border-radius:50%;border:1.5px solid var(--ink3);background:transparent;color:var(--ink2);cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center;transition:opacity .25s ease,color .15s,border-color .15s}
 .vcoff:hover{color:var(--ink);border-color:var(--ink2)}
 .vcoff:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
 .vcoff svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
@@ -14085,8 +14088,11 @@ const VCU={el:null,state:"",t:0};
 function vcUiEl(){
   if(VCU.el) return VCU.el;
   const d=document.createElement("div"); d.className="vcov"; d.setAttribute("aria-hidden","true");
-  d.innerHTML='<div class="vcmic"><svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></div><div class="vctx"></div><button type="button" class="vcoff" aria-label="Stop listening" title="Stop listening - voice commands off until turned on again in Settings"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button>';
+  d.innerHTML='<div class="vcmic"><svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></div><div class="vctx"></div><div class="vcsw"><span class="pbtunel">Voice commands</span><button type="button" class="tsw" role="switch" aria-checked="true" aria-label="Voice commands" title="Turn voice commands off - on again in Settings"><i></i></button></div><button type="button" class="vcoff" aria-label="Stop listening" title="Stop listening - voice commands off until turned on again in Settings"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button>';
   d.querySelector(".vcoff").onclick=e=>{ e.stopPropagation(); vcPause(); };
+  // the switch: slides off, then voice commands go off for good (until switched on again in Settings)
+  const sw=d.querySelector(".vcsw .tsw"), off=e=>{ e.stopPropagation(); if(sw.getAttribute("aria-checked")!=="true") return; sw.setAttribute("aria-checked","false"); setTimeout(()=>{ vcSet(false); vcPause(); },260); };
+  sw.onclick=off; d.querySelector(".vcsw .pbtunel").onclick=off;
   document.body.appendChild(d); return VCU.el=d;
 }
 // the words as heard, in quotes; "[unk]" (a sound it has no word for) left out
@@ -14578,6 +14584,7 @@ if(VC_PHONE) document.documentElement.classList.add("novc");
 function vcSet(on){
   if(VC_PHONE) on=false;   // the speech model too heavy for a phone: never loaded there
   VC.on=on;
+  if(VCU.el){ const w=VCU.el.querySelector(".vcsw .tsw"); if(w) w.setAttribute("aria-checked",String(on)); }   // the screen's switch as the setting
   document.querySelectorAll("#vcSel button").forEach(b=>b.setAttribute("aria-pressed",String((b.dataset.v==="on")===on)));
   try{ localStorage.setItem(VC_KEY,on? "on" : "off"); }catch(err){}
   if(on&&!VC.rec) vcStart(); else if(!on) vcStop();
