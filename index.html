@@ -6286,6 +6286,8 @@ function mtaQuiet(now){
   if(!MTA.on||!MT.on) return false;
   const A=MTA;
   if(!A.an||A.stream!==MIC||!MIC||!MIC.getAudioTracks().some(t=>t.readyState==="live")){ mtaWire(); return !A.open; }
+  // a voice command being said (its screen up): speech, not playing - no beat, and nothing learnt from it
+  if(mtaHush()){ A.hit=0; A.t=now; if(A.open){ A.open=false; A.q=0; mtaStop(now+0.005); mtaPaint(); } return true; }
   A.an.getFloatFrequencyData(A.buf);
   const hz=ac().sampleRate/A.an.fftSize;
   // a click's shadow: its sound, heard up to the speaker's delay late - its pitches and their overtones out of the reading
@@ -6354,8 +6356,11 @@ function mtaShadow(now){
   for(const n of MT.q) if(n.t<=now&&now<n.t+MTA_CW+L){ const m= n.k===2? 1.5 : n.k===1? 1 : 0.75; F.push(1250*m,2500*m,3750*m); }
   return F;
 }
+// the voice command screen up (from "Sonoscope" being made out until the screen has faded)
+function mtaHush(){ try{ return !!VCU.state; }catch(err){ return false; } }
 function mtaFast(){
   const A=MTA; if(!(A.on&&MT.on)||A.open||!A.an2) return;
+  if(mtaHush()){ A.ghit=0; return; }
   if(mtaShadow(ac().currentTime).length){ A.ghit=0; return; }   // the metronome's own last click, not playing
   A.an2.getFloatTimeDomainData(A.b2); let e=0; for(const v of A.b2) e+=v*v; const db=10*Math.log10(e/A.b2.length+1e-20);
   const loud= isFinite(A.gfloor)&&db>A.gfloor+MTA_GO;
@@ -14147,6 +14152,7 @@ function vcUiListen(){
   const d=vcUiEl(); clearTimeout(VCU.t);
   if(VCU.state!=="on"){ d.querySelector(".vctx").textContent=""; d.className="vcov"; void d.offsetWidth; d.className="vcov on"; }
   VCU.state="on";
+  if(typeof MTA!=="undefined"&&MTA.on&&MT.on) mtaQuiet(ac().currentTime);   // "Sonoscope" may have started the beat
   VCU.t=setTimeout(()=>vcUiEnd(null),7000);     // heard begun, never finished
 }
 function vcUiEnd(act){
