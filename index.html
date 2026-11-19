@@ -5435,6 +5435,21 @@ function ac(){
   if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
   return audioCtx;
 }
+/* The app's own sounds, for Auto Pause to leave out: every sound started on the app's audio context (a take played
+   back, the drone, the timer's buzz, any note the app plays) is kept until it has ended - whatever starts it, new ones
+   too. The metronome's clicks are not (MTA_OWN while they are made): Auto Pause has its own way with those. */
+var MTA_OWN=false;
+const MTS={live:new Set(), end:-1e9};
+if(window.AudioScheduledSourceNode){ const P=AudioScheduledSourceNode.prototype, st=P.start;
+  P.start=function(when){
+    const r=st.apply(this,arguments);
+    if(!MTA_OWN&&this.context===audioCtx){ const n=this; n._mtsT=Math.max(+when||0,n.context.currentTime); MTS.live.add(n);
+      n.addEventListener("ended",()=>{ MTS.live.delete(n); MTS.end=Math.max(MTS.end,n.context.currentTime); }); }
+    return r;
+  };
+}
+// something of the app's sounding at `now` (or ended less than `tail` ago: still on its way out of the speaker)
+function mtsSounding(now,tail){ for(const n of MTS.live) if(n._mtsT<=now+0.02) return true; return now-MTS.end<tail; }
 const VIEWS=["vMain","vResults","vMet","vDrone","vRhy","vClock"];
 const TOOL_VIEWS={met:"vMet",drn:"vDrone",rhy:"vRhy",clk:"vClock"};
 const isTool=v=> v==="vMet"||v==="vDrone"||v==="vRhy"||v==="vClock";
@@ -6216,7 +6231,8 @@ $("mtVol").addEventListener("input",()=>{
    `kind`: 2 the bar's first beat, 1 a beat, 0 a sub-beat. */
 function mtClick(t,kind,bi,grid){
   const c=ac(), out=mtBus();
-  const nodes=mtVoice(c,out,t,kind), g=mtGain();
+  MTA_OWN=true; let nodes; try{ nodes=mtVoice(c,out,t,kind); }finally{ MTA_OWN=false; }
+  const g=mtGain();
   MT.q.push({t,nodes,main:kind>0,bi,k:kind,g,...(grid? {gb:MT.beat,gi:MT.idx} : null)});
   // a take being recorded keeps a note of every click, to take them out again
   if(LV&&!LV.paused&&LV.mr) LV.clicks.push({t,k:kind,g});
@@ -6356,8 +6372,13 @@ function mtaShadow(now){
   for(const n of MT.q) if(n.t<=now&&now<n.t+MTA_CW+L){ const m= n.k===2? 1.5 : n.k===1? 1 : 0.75; F.push(1250*m,2500*m,3750*m); }
   return F;
 }
-// the voice command screen up (from "Sonoscope" being made out until the screen has faded)
-function mtaHush(){ try{ return !!VCU.state; }catch(err){ return false; } }
+// the voice command screen up (from "Sonoscope" being made out until the screen has faded), or one of the app's own
+// sounds playing (a take played back, the drone...) and for MTA_TAIL after, its end still coming out of the speaker
+const MTA_TAIL=0.5;
+function mtaHush(){
+  try{ if(VCU.state) return true; }catch(err){}
+  return !!audioCtx&&mtsSounding(audioCtx.currentTime,MTA_TAIL);
+}
 function mtaFast(){
   const A=MTA; if(!(A.on&&MT.on)||A.open||!A.an2) return;
   if(mtaHush()){ A.ghit=0; return; }
