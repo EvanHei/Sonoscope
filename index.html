@@ -1283,6 +1283,14 @@ canvas{display:block;width:100%}
 #rsRail .rgside{display:none}
 #rsRail.rhymode>:not(.rsnav):not(.rgside):not(.ipside):not(.strip){display:none}
 #rsRail.rhymode .rgside{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
+/* the metronome over the playback: a switch, then its tempo and volume */
+.rgmt{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.rgmth{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rgmtr{display:flex;align-items:center;gap:8px;transition:opacity .2s}
+.rgmt.off .rgmtr{opacity:.4}
+.rmtt{display:inline-flex;align-items:baseline;gap:5px;color:var(--ink2);font-size:calc(17px*var(--fs));white-space:nowrap}
+.rmtt input{width:64px;font:inherit;color:var(--ink);background:var(--sunk);border:1px solid var(--line2);border-radius:6px;padding:3px 4px;text-align:center;-moz-appearance:textfield;appearance:textfield}
+.rmtt input::-webkit-inner-spin-button,.rmtt input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 /* Rhythm: below the tempo and time signature, the list and totals as on Intonation, in ms */
 #rsRail.rhymode .ipside{display:flex;flex-direction:column;min-height:0}
 #rsRail.rhymode .iplist{max-height:calc(100vh - 450px)}
@@ -1308,7 +1316,12 @@ canvas{display:block;width:100%}
 #rsRail.intmode .stat .lbl{font-size:calc(15px*var(--fs))}
 #rsRail.intmode .stat b{font-size:calc(42px*var(--fs))}
 #rsRail.intmode .strip{display:flex;padding-left:0;padding-right:0}
-.iph{font-size:calc(13px*var(--fs));letter-spacing:.16em;text-transform:uppercase;color:var(--ink2);margin:2px 0 10px}
+.iph{font-size:calc(13px*var(--fs));letter-spacing:.16em;text-transform:uppercase;color:var(--ink2);margin:2px 0 10px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* collapse all: two arrows closing on a dashed line, frameless like the settings gear; seen only while a row is open */
+.ipcol.gear{width:30px;height:30px;margin:-7px -4px -7px 0;flex:none;opacity:0;visibility:hidden;transition:opacity .25s ease,visibility .25s,color .15s,filter .15s}
+.iph.can .ipcol{opacity:1;visibility:visible}
+.ipcol svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-reduced-motion:reduce){ .ipcol.gear{transition:none} }
 .iplist{overflow:auto;max-height:calc(100vh - 330px);margin:0 -6px}
 .iprow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:18px;align-items:baseline;
   padding:5px 6px;font-size:calc(19px*var(--fs));border-radius:var(--r);cursor:pointer;font-variant-numeric:lining-nums tabular-nums}
@@ -2341,8 +2354,14 @@ nav.tabs button[aria-selected="true"]{background:var(--hov);border-color:var(--l
     <div class="rgside" id="rgSide">
       <div class="vsel rgsel" id="rgTempo" role="group" aria-label="Tempo"></div>
       <div class="vsel rgsel" id="rgMeter" role="group" aria-label="Time signature"></div>
+      <div class="rgmt off" id="rmt">
+        <div class="rgmth"><span class="pbtunel" id="rmtL">Metronome</span><button type="button" class="tsw" id="rmtOn" role="switch" aria-checked="false" aria-label="Metronome with the playback" title="Clicks the beat along with the playback"><i></i></button></div>
+        <div class="rgmtr">
+          <span class="rmtt"><span class="rgq" id="rmtQ">&#9833;</span>=<input type="number" id="rmtBpm" min="30" max="300" step="1" aria-label="Metronome tempo, beats per minute"></span>
+        </div>
+      </div>
     </div>
-    <div class="ipside" id="ipSide"><div class="iph">Average per note</div><div class="iplist" id="ipList"></div></div>
+    <div class="ipside" id="ipSide"><div class="iph"><span>Average per note</span><button type="button" class="gear ipcol" id="ipCol" aria-label="Collapse all" title="Collapse all"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v6.5M8.5 5L12 8.5L15.5 5"/><path d="M3.5 12h3M10.5 12h3M17.5 12h3"/><path d="M12 22v-6.5M8.5 19L12 15.5L15.5 19"/></svg></button></div><div class="iplist" id="ipList"></div></div>
     <!-- the note in large type; a double stop names both, each over its column -->
     <div class="dsrow"><span></span><div class="big num" id="rsNmA"></div><div class="big num alt" id="rsNmB"></div></div>
     <div class="hr"></div>
@@ -12050,6 +12069,73 @@ function rgSide(){
   $("rgMeter").querySelectorAll("button").forEach(b=>b.onclick=()=>{ RG.user.meter=b.dataset.m; redo(); });
 }
 
+/* The Rhythm page's metronome: clicks along with the playback, on the take's own beat - bar lines where the staff
+   has them, at the take's tempo (a straight line through where its notes fall: the steady beat it keeps to) or a
+   tempo set here. They sound only while the take plays on this page, slowed with it, and start again from wherever
+   it is moved to. Set to another tempo, the bar lines stay where they are and the beats go at the new speed. */
+const RMT_KEY="sonoscope.rhythmMetronome";
+const RMT={on:false,bpm:0,ts:null,bus:null,q:[],next:null,sig:"",tm:0};
+try{ const v=JSON.parse(localStorage.getItem(RMT_KEY)||"{}"); RMT.on=!!v.on; }catch(err){}
+function rmtSave(){ try{ localStorage.setItem(RMT_KEY,JSON.stringify({on:RMT.on})); }catch(err){} }
+const rmtGain=()=>mtGain();   // as loud as the Metronome tab's volume
+function rmtBus(){
+  if(RMT.bus) return RMT.bus;
+  const c=ac(), g=c.createGain(), lp=c.createBiquadFilter();
+  lp.type="lowpass"; lp.frequency.value=MT_LP; lp.Q.value=0.5;
+  g.connect(lp); lp.connect(c.destination);
+  return RMT.bus=g;
+}
+// the take's steady beat: time = a + b x quarter notes from a bar line; the beat (a quarter, or a dotted quarter in 6/8) and the bar
+function rmtGrid(){
+  if(!RG.ok||!RG.ks||!RG.ts) return null;
+  if(RMT.ts!==RG.ts){ RMT.ts=RG.ts; RMT.bpm=0; }   // a new take: its own tempo again
+  const g=RG.ks.map(k=>{ const p=RG.pos.get(k); return p? p.g : NaN; }), L=linFit(g,RG.ts,g.map(v=>isFinite(v)? 1 : 0));
+  if(!L||!(L.b>0)) return null;
+  const M=RG_M[RG.meter]||RG_M["4/4"], take=60/(M.beat*L.b);
+  return {a:L.a, per:60/(RMT.bpm||take), n:Math.max(1,Math.round(M.bar/M.beat)), take, six:M.beat!==1};
+}
+function rmtLive(){ return RMT.on&&PB.on&&!!S.buf&&typeof ANA!=="undefined"&&ANA.page==="rhy"; }
+// the clicks waiting taken back (from now on)
+function rmtClear(){
+  const now=ac().currentTime;
+  for(const n of RMT.q) if(n.t>now) for(const x of n.nodes){ try{ if(x.stop) x.stop(); x.disconnect(); }catch(err){} }
+  RMT.q=[]; RMT.next=null;
+}
+function rmtPump(){
+  if(RMT.bus) RMT.bus.gain.value=rmtGain();
+  if(!rmtLive()){ rmtClear(); clearInterval(RMT.tm); RMT.tm=0; return; }
+  const G=rmtGrid(); if(!G) return;
+  const sig=G.a+"|"+G.per+"|"+G.n+"|"+PB.clk+"|"+PB.rate; if(sig!==RMT.sig){ rmtClear(); RMT.sig=sig; }
+  const c=ac(), r=PB.rate, pos=pbPos(), now=c.currentTime, at=x=>PB.clk+(x-PB.at)/r;
+  let k= RMT.next!=null? RMT.next : Math.ceil((pos-G.a)/G.per-1e-6);
+  for(;;k++){
+    const x=G.a+k*G.per;
+    if(x>S.dur||at(x)>now+0.25) break;
+    const t=at(x); if(x<0||t<now) continue;
+    const kind= G.n>1&&((k%G.n)+G.n)%G.n===0? 2 : 1, nodes=mtVoice(c,rmtBus(),t,kind);
+    RMT.q.push({t,nodes});
+  }
+  RMT.next=k; RMT.q=RMT.q.filter(n=>n.t>now-1);
+  if(!RMT.tm) RMT.tm=setInterval(rmtPump,40);
+}
+// played, stopped, moved, sped or slowed: the clicks start again from where the take now is
+const rmtPlay0=pbPlay; pbPlay=function(){ rmtClear(); RMT.sig=""; const r=rmtPlay0.apply(this,arguments); rmtPump(); return r; };
+const rmtStop0=pbStop; pbStop=function(){ const r=rmtStop0.apply(this,arguments); rmtPump(); return r; };
+function rmtPaint(){
+  const G=rmtGrid(), w=$("rmt");
+  w.classList.toggle("off",!RMT.on);
+  $("rmtOn").setAttribute("aria-checked",String(RMT.on));
+  if(G){ $("rmtQ").textContent= G.six? "\u2669." : "\u2669"; if(document.activeElement!==$("rmtBpm")) $("rmtBpm").value=Math.round(RMT.bpm||G.take); }
+}
+function rmtSet(on){ RMT.on=!!on; rmtSave(); rmtPaint(); RMT.sig=""; rmtPump(); }
+function rmtTempo(v){ const G=rmtGrid(); if(!G) return; RMT.bpm=clamp(Math.round(+v||G.take),30,300); if(Math.abs(RMT.bpm-G.take)<0.5) RMT.bpm=0; rmtPaint(); RMT.sig=""; rmtPump(); }
+$("rmtOn").addEventListener("click",()=>rmtSet(!RMT.on));
+$("rmtL").addEventListener("click",()=>rmtSet(!RMT.on));
+$("rmtBpm").addEventListener("change",()=>rmtTempo($("rmtBpm").value));
+$("rmtBpm").addEventListener("keydown",e=>{ if(e.key==="Enter") e.target.blur(); });
+const rmtSide0=rgSide; rgSide=function(){ const r=rmtSide0.apply(this,arguments); rmtPaint(); RMT.sig=""; return r; };
+rmtPaint();
+
 /* ---- writing it ---- */
 /* Open heads as engraved: a half note's oval tilted like a filled head, with
    a thin hole tilted a little more, so it is thick at the upper left and
@@ -12314,6 +12400,7 @@ function anaShow(){
   if(p==="int") ipSide();
   $("rsRail").classList.toggle("rhymode",p==="rhy");
   if(p==="rhy"){ rgSide(); ipSide(); }
+  rmtPump();
   stripPaint();
   if(p==="hl"||p==="take"||p==="int"||p==="rhy") requestAnimationFrame(()=>{ drawStaff(); if(S.rk>=0) stRow(S.rk,false); rsLanes(); pbPaint(); });
 }
@@ -12752,6 +12839,7 @@ function ipSide(){
     gEl.classList.toggle("open",open);
     gEl.querySelector(".iprow").setAttribute("aria-expanded",String(open));
     IPL.name= open? G[+gEl.dataset.g].name : null;
+    ipColPaint();
   };
   el.querySelectorAll(".iprow").forEach(r=>{
     r.onclick=()=>toggle(r.parentElement);
@@ -12761,7 +12849,15 @@ function ipSide(){
     ipGo(+r.dataset.k);
     el.querySelectorAll(".ipocc").forEach(o=>o.classList.toggle("on",o===r));
   });
+  ipColPaint();
 }
+// collapse all: shown (fading in) while any row is open, gone (fading out) once none is
+function ipColPaint(){ const on=!!$("ipList").querySelector(".ipg.open"), b=$("ipCol"); b.closest(".iph").classList.toggle("can",on); b.tabIndex= on? 0 : -1; b.setAttribute("aria-hidden",String(!on)); }
+function ipCollapse(){
+  $("ipList").querySelectorAll(".ipg.open").forEach(o=>{ o.classList.remove("open"); o.querySelector(".iprow").setAttribute("aria-expanded","false"); });
+  IPL.name=null; ipColPaint();
+}
+$("ipCol").onclick=()=>ipCollapse();
 function ipGo(k){
   const n=S.notes&&S.notes[k]; if(!n) return;
   HL.stop++; pbStop();
@@ -14470,6 +14566,9 @@ const VC_UI=[
   [["calibrate","calibrate (on|it)","(turn on|switch on|use) (calibrate|calibration)","calibrated","[play [it]] in tune","(turn on|switch on|use) in tune","in tune on","tune it","(fix|correct) the (tuning|pitch|intonation)","make it in tune","(play|let me hear) it in tune","how it should sound"], ()=> vcOnRes()||(window.PZA&&PZA.on&&LV&&LV.paused)? ()=>pbTuneSet(true) : null],
   [["[play it] as (played|recorded)","(turn off|switch off) in tune","calibrate off","(turn off|switch off|stop) (calibrate|calibration|calibrating)","in tune off","(the|back to the) original","back to normal","(play|let me hear) the original"], ()=> (vcOnRes()||(window.PZA&&PZA.on&&LV&&LV.paused))&&PB.tune? ()=>pbTuneSet(false) : null],
   [["auto pause","auto pause on","(turn on|switch on|use|enable) [the] auto pause","(wait for me|follow me|only click when i play)"], ()=>()=>mtAutoSet(true)],
+  [["click track [on]","(turn on|switch on|add|play) [the] (click track|beat track)","(metronome|click|clicks|beat) (with|over|along with) [the] (playback|recording|take)","(turn on|switch on|add) [the] (metronome|click|clicks|beat) (with|over|along with) [the] (playback|recording|take)"], ()=> S.buf&&RG.ok? ()=>{ if(ANA.page!=="rhy") anaPage("rhy"); rmtSet(true); } : null],
+  [["click track off","(turn off|switch off|remove|stop) [the] (click track|beat track)","(turn off|switch off|remove|stop) [the] (metronome|click|clicks|beat) (with|over|along with|on) [the] (playback|recording|take)","no (click track|clicks)"], ()=> RMT.on? ()=>rmtSet(false) : null],
+  [["collapse [all|everything|them|the notes|the rows]","close (all|everything|them) [up]","close all [the] (notes|rows)"], ()=> $("ipList").querySelector(".ipg.open")? ()=>ipCollapse() : null],
   [["auto pause off","(turn off|switch off|disable|stop) [the] auto pause","(always click|click all the time|don't wait for me)"], ()=>()=>mtAutoSet(false)],
   [["reload","(reload|refresh) [the] (page|app)","(update|get the new version)"], ()=> !$("updNote").hidden? ()=>location.reload() : null],
   [["(clear|remove|drop) [the] selection","(select|show) all [the] notes","deselect"], ()=> PSC.on? ()=>pscClear() : null],
