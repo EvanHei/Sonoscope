@@ -5281,7 +5281,7 @@ function specAt(x,centre,fft,re,im,hann,mag){
 /* The search itself, on a magnitude spectrum from anywhere. The live monitor
    runs at the device's own rate with its own window, so the bin width comes in
    as an argument rather than being read off the offline constants. */
-function dsFromMag(mag,binHz,half,mx,f1,aref,live){
+function dsFromMag(mag,binHz,half,mx,f1,aref,live,cx){
   if(mx<=0) return {multi:false,second:null,frac:0};
   const pk=specPeaks(mag,binHz,half,mx);
   if(!pk.length) return {multi:false,second:null,frac:0};
@@ -5292,7 +5292,7 @@ function dsFromMag(mag,binHz,half,mx,f1,aref,live){
   for(const p of pk){ tot+=p.a*p.a; if(!own1(p)) unex+=p.a*p.a; }
   const frac= tot>0? unex/tot : 0;
 
-  const found=partnerOf(pk,f1,binHz,half,mx,aref,live);
+  const found=partnerOf(pk,f1,binHz,half,mx,aref,live,cx);
   if(found) return {multi:true, second:found, frac};
   // Octaves are invisible to the search: the upper note's partials land
   // exactly on the lower note's even harmonics, so nothing is left over.
@@ -5311,7 +5311,17 @@ function dsFromMag(mag,binHz,half,mx,f1,aref,live){
 /* The partner search from one note: candidates a semitone grid either side,
    each scored only on partials the note does not account for. Returns the
    partner as {f,midi,name,cents} or null. */
-function partnerOf(pk,f1,binHz,half,mx,aref,live){
+/* cx (live): {known, rang}.
+   rang (only in a passage of tenths: one held a moment ago, TEN_PASS): the notes tracked lately. A second onto one of
+   them is that note still ringing on (liveSecond's ringSec refuses it), but found first it took the frame's one vote,
+   and the next tenth behind it - the C6 over Ab4 just after G4, the G6 over Eb5 just after D5 - gathered none. There
+   the best tenth has the vote instead. (Everywhere, a note rung on from earlier in a single-note scale found tenths.)
+   known: partners the evidence already has some of (shown faintly, or held). A tenth up high has two or three
+   partials of its own over the floor and scores about at its bar, in and out from frame to frame, so its evidence
+   kept decaying back under the mark; once it has some, it is confirmed at TEN_KNOWN of the bar. A first sighting
+   still has to clear the whole of it. (2026-11-20: tenths in E-flat major from a player's own notes, Eb4/G5 up.) */
+const TEN_KNOWN=0.6, TEN_BACK=3, TEN_PASS=1.5, TEN_VOTE=2, SUB_TOL=35;   // SUB_TOL: cents (liveSecond, a held pair's bass)
+function partnerOf(pk,f1,binHz,half,mx,aref,live,cx){
   const own=p=>{ const k=Math.round(p.f/f1); return k>=1&&k<=30&&Math.abs(p.f-k*f1)<hTol(k,f1,binHz); };
   const m1=Math.round(69+12*Math.log2(f1/aref));
   // The tracked note's own strength is the yardstick for a partner. Measuring
@@ -5344,14 +5354,16 @@ function partnerOf(pk,f1,binHz,half,mx,aref,live){
     return {s,n};
   };
   const ok=st=>playable(Math.min(m1,m1+st),Math.max(m1,m1+st));
-  let best=null;
+  let best=null, ten=null;
   for(let st=-19;st<=19;st++){
     if(!st||!ok(st)) continue;
     const f=f1*Math.pow(2,st/12);
     if(f<F_MIN||f>F_MAX) continue;
     const r=score(f);
     if(!best||r.s>best.s) best={...r,f,st};
+    if((st===15||st===16)&&(!ten||r.s>ten.s)) ten={...r,f,st};
   }
+  if(cx&&cx.rang&&best&&Math.abs(best.st)<=2&&cx.rang.includes(m1+best.st)&&ten&&ten.n>=2) best=ten;
   if(!best||best.n<2) return null;
   // A harmonic sum scores a candidate an octave too high almost as well,
   // because its partials are a subset. Drop to the lowest octave that still
@@ -5429,7 +5441,8 @@ function partnerOf(pk,f1,binHz,half,mx,aref,live){
   // A second is the note just left, still ringing - often as little more than
   // its fundamental, which no bowed note is. Played, it shows its own partials.
   if(INSTR.manyPart&&st<=2&&best.n<3) return null;
-  if(best.s<(st===7? DS_RATIO_5TH : st===5? INSTR.ratio4 : st===15||st===16? INSTR.ratio10 : DS_RATIO)*(many? (imp&&live? 0.3 : 0.5) : imp4? 0.5 : ten3? 0.75 : 1)*yard(best.f)) return null;
+  const tenK= live&&(st===15||st===16)&&INSTR.manyPart&&!!(cx&&cx.known&&cx.known.includes(m1+best.st));
+  if(best.s<(st===7? DS_RATIO_5TH : st===5? INSTR.ratio4 : st===15||st===16? INSTR.ratio10 : DS_RATIO)*Math.min(many? (imp&&live? 0.3 : 0.5) : imp4? 0.5 : ten3? 0.75 : 1, tenK? TEN_KNOWN : 1)*yard(best.f)) return null;
   const near=Math.round(69+12*Math.log2(best.f/aref));
   // The search runs on a grid of exact semitones from the tracked note, so the
   // grid point carries that note's tuning, not the partner's. Read the cents
@@ -7292,6 +7305,20 @@ function liveSecond(f1,aref,on){
   f1=realFund(mag,binHz,half,mx,f1,true);
   // the model's note has the last word over the spectrum's (see sfFix)
   f1=sfFix(f1,LV.tNow);
+  // A held tenth's two notes can hand the tracker a bass neither of them is: C5 with E-flat 6 read as F3, a twelfth
+  // under the C5, every few frames - each one taken for a new note, dropping the pair to build it up again. While a
+  // pair is held and both its voices still sound, a reading an exact 1/2, 1/3, 1/4 or 1/5 of one of its notes is that
+  // note. (2026-11-20: tenths in E-flat major; the model's own note there was right, but under its bar of confidence.)
+  if(LV.pv&&(LV.pv.hi-LV.pv.lo===15||LV.pv.hi-LV.pv.lo===16)&&INSTR.manyPart&&on&&1200*Math.log2(f1/(aref*Math.pow(2,(LV.pv.lo-69)/12)))<-150){   // under the pair, not on it
+    const P=LV.pv;
+    for(const m of [P.lo,P.hi]){
+      const g=aref*Math.pow(2,(m-69)/12), k=Math.round(g/f1);
+      if(k<2||k>5||Math.abs(1200*Math.log2(f1*k/g))>SUB_TOL) continue;
+      const a=voiceRead(mag,binHz,half,mx,P.lo,P.hi,aref), b=voiceRead(mag,binHz,half,mx,P.hi,P.lo,aref);
+      if(a&&b&&a.a>=VOICE_MIN&&b.a>=VOICE_MIN) f1*=k;
+      break;
+    }
+  }
   LV.f1=f1;
   LV.vr=null; LV.tr=null; LV.tent=null;
   if(LV.log) LV.peaks=topPeaks(mag,binHz,half,mx);
@@ -7302,8 +7329,15 @@ function liveSecond(f1,aref,on){
   // the notes tracked lately, to tell a pair just played from one ringing on
   LV.m1h.push(m1);
   if(LV.m1h.length>DS_RECENT*LV_HZ) LV.m1h.shift();
-  const vote=(lo,hi)=>{ const k=lo+"/"+hi; LV.ev[k]=(LV.ev[k]||0)+1; };
-  const r=dsFromMag(mag,binHz,half,mx,f1,aref,true);
+  // In a passage of tenths (one held a moment ago, TEN_PASS) the next tenth is expected: its votes count TEN_VOTE, so
+  // it is taken up on two frames that agree rather than three or more. Not the one held (its evidence is not let run up).
+  const tenPass= LV.fr-(LV.tenFr??-1e9)<TEN_PASS*LV_HZ;
+  const vote=(lo,hi)=>{ const k=lo+"/"+hi, held0= LV.pv&&LV.pv.lo===lo&&LV.pv.hi===hi;
+    LV.ev[k]=(LV.ev[k]||0)+(tenPass&&!held0&&(hi-lo===15||hi-lo===16)? TEN_VOTE : 1); };
+  // partners with some evidence already, for the tenths' lower bar (partnerOf)
+  const known=[]; for(const k in LV.ev) if(LV.ev[k]>=DS_TENT||LV.pv&&k===LV.pv.lo+"/"+LV.pv.hi){ const [a,b]=k.split("/").map(Number); if(a===m1) known.push(b); else if(b===m1) known.push(a); }
+  if(LV.pv){ if(LV.pv.lo===m1) known.push(LV.pv.hi); else if(LV.pv.hi===m1) known.push(LV.pv.lo); }
+  const r=dsFromMag(mag,binHz,half,mx,f1,aref,true,INSTR.manyPart? {known, rang: tenPass? LV.m1h : null} : null);
   const m2= r.second? r.second.midi : null;
   // A note played with vibrato is not an octave: a player seldom puts
   // vibrato on one. Its bright even partials and their drift were the
@@ -7429,7 +7463,11 @@ function liveSecond(f1,aref,on){
     // missed at the start of each pair.
     const other= P.lo===m1? P.hi : P.lo;
     const settled= LV.fadeKnown||LV.quickFade===false||LV.octLine===bk
-                 ||INSTR.manyPart&&[3,4,8,9].includes(P.hi-P.lo)&&LV.quickFade===null&&!LV.m1h.includes(other);
+                 ||INSTR.manyPart&&[3,4,8,9].includes(P.hi-P.lo)&&LV.quickFade===null&&!LV.m1h.includes(other)
+                 // and a tenth, whose ringing note would be nine steps of a scale back, not two: none in TEN_BACK s -
+                 // found above the note tracked, not under it (the hard case, partnerOf), where a fast single-note
+                 // scale made one (2026-11-20: tenths in E-flat major from a player's own notes; single-note scales no more pairs)
+                 ||INSTR.manyPart&&(P.hi-P.lo===15||P.hi-P.lo===16)&&m1===P.lo&&LV.quickFade===null&&!LV.hist.some(h=>h.v&&h.t>LV.tNow-TEN_BACK&&Math.round(h.m)===other);
     const tailOk= !left||LV.fadeKnown||LV.midFade===false||LV.octLine===bk;
     // Nor a second whose other note was itself played a moment ago: that is
     // the note before still ringing under a step of the melody. On twenty
@@ -7444,6 +7482,7 @@ function liveSecond(f1,aref,on){
     }
   }
   if(LV.pv){
+    if(LV.pv.hi-LV.pv.lo===15||LV.pv.hi-LV.pv.lo===16) LV.tenFr=LV.fr;   // a passage of tenths (partnerOf, cx.rang)
     const rd= LV.pv===Q? rq : readPair(LV.pv);
     LV.vr={lo: rd.lo? rd.lo.cents : NaN, hi: rd.hi? rd.hi.cents : NaN};
     LV.vp={lo: rd.lo? rd.lo.p : 0, hi: rd.hi? rd.hi.p : 0};
