@@ -9048,6 +9048,8 @@ async function analyze(buf,stay){
   if(S.notes&&S.sfa&&S.notes.length>1){ const G=S.sfa, ar=S.aref; const n0=S.notes.length; S.notes=glideOut(S.notes,(t0,t1)=>glSf(G,ar,t0,t1)); if(S.notes.length!==n0) noteRenum(); }
   // a leap no hand makes, and a pair no hand stops (leapOut)
   if(S.notes&&S.notes.length>1){ const N0=S.notes; S.notes=leapOut(N0); if(S.notes!==N0) noteRenum(); }
+  // a split second the trained model doubts, turned back against the run (blipOut)
+  if(S.notes&&S.sfa&&S.notes.length>2){ const N0=S.notes; S.notes=blipOut(N0,S.sfa); if(S.notes!==N0) noteRenum(); }
   // what was said to Sonoscope while recording: not notes
   if(S.liveSpeech&&S.liveSpeech.buf===buf&&S.notes&&S.liveSpeech.list.length){ S.notes=S.notes.filter(n=>!vcSaid(n,S.liveSpeech.list)); noteRenum(); }
   // a note between two semitones, in a passage plainly in one key: named as the key's (keySnap)
@@ -13811,7 +13813,7 @@ async function lvMatch(c,midi,voiced,ft){
 }
 // what the staff writes: the matched notes, and any found since
 /* ---- slides ---- */
-const GL_MAX=0.25, GL_TRAVEL=0.6, GL_STEP_MAX=0.08, GL_HELD=0.2, GL_GAP=0.08, GL_SLOW=0.5, GL_JUMP=0.6, GL_PASS=0.3, GL_STEP=5, GL_SIT=0.15;
+const GL_PASS1=0.6, GL_MAX=0.25, GL_TRAVEL=0.6, GL_STEP_MAX=0.08, GL_HELD=0.2, GL_GAP=0.08, GL_SLOW=0.5, GL_JUMP=0.6, GL_PASS=0.3, GL_STEP=5, GL_SIT=0.15;
 // a note's readings moving the whole way: their first third to their last by GL_TRAVEL or more, one way, no step back
 // worth the name - the way it moves (1 up, -1 down), else 0. The trained model's track (SwiftF0) follows a slide;
 // the tracker's snaps to the notes
@@ -13865,7 +13867,9 @@ function glideOut(N,pitchAt){
         tv+=(median(g.slice(-c))-median(g.slice(0,c)))*dir; nt++; }
       // a semitone run has to be seen moving inside its notes; a wider step's jump, were it fingered, shows in the readings
       let big=false; for(let q=a+1;q<=k;q++) if(Math.abs(N[q].target-N[q-1].target)>=3) big=true;
-      if(!big&&(!nt||tv/nt<GL_PASS)) continue;
+      // one note alone between the two: a quick fingered note in a scale, landed a little flat and set right, moves a
+      // third of a semitone; a slide carries the note it passes through a semitone or more (measured above) - GL_PASS1
+      if(!big&&(!nt||tv/nt<(k===a+2? GL_PASS1 : GL_PASS))) continue;
       for(let q=a+1;q<k;q++) slow.add(q);
       a=k-1; done=true;
     }
@@ -13930,6 +13934,28 @@ function leapOut(N){
       : {...n,target:keep,cents:n.second.cents,name:noteName(keep),f:n.second.f,second:null,multi:false,pair:null};
   }
   return out;
+}
+/* A blip the trained model doubts. Crossing strings in a quick run, a string can sound for a split second on its own
+   (heard: a D4 between a C4 and the Bb3 after it, in an E-flat scale going down) and both trackers follow it. A note this
+   short (LP_SHORT or less) that turns back against the run - above both notes either side, or below both - is dropped
+   when the trained model is plainly less sure of it than of either neighbour (median confidence under BL_CONF, and
+   BL_DROP or more under each). A real quick turn or trill note is played, not caught: the model is as sure of it as of
+   the notes around it. G: {hz,conf} every 16 ms. */
+const BL_CONF=0.75, BL_DROP=0.2;   // measured: the two blips 0.53 and 0.65; real turns at the ends of runs 0.91 or more
+function blipOut(N,G){
+  if(!N||N.length<3||!G) return N;
+  const dur=n=>Math.max(0,n.t1-n.t0), near=(x,y)=> x&&y&&y.t0-x.t1<=LP_GAP;
+  const cf=n=>{ const r=[]; for(let j=Math.ceil(n.t0/0.016);j<n.t1/0.016&&j<G.conf.length;j++) r.push(G.conf[j]); return r.length? median(r) : NaN; };
+  const drop=new Set();
+  for(let i=1;i<N.length-1;i++){
+    const n=N[i], a=N[i-1], b=N[i+1];
+    if(n.second||a.second||b.second||dur(n)>LP_SHORT||!near(a,n)||!near(n,b)) continue;
+    const up=n.target>a.target&&n.target>b.target, dn=n.target<a.target&&n.target<b.target;
+    if(!up&&!dn) continue;
+    const c=cf(n), ca=cf(a), cb=cf(b);
+    if(c<BL_CONF&&ca-c>=BL_DROP&&cb-c>=BL_DROP) drop.add(i);
+  }
+  return drop.size? N.filter((n,i)=>!drop.has(i)) : N;
 }
 var LPO={k:null,out:null};
 function lvDrawn(){
