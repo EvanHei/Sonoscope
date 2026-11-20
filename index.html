@@ -14210,8 +14210,8 @@ const VCU={el:null,state:"",t:0};
 function vcUiEl(){
   if(VCU.el) return VCU.el;
   const d=document.createElement("div"); d.className="vcov"; d.setAttribute("aria-hidden","true");
-  d.innerHTML='<div class="vcmic"><svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></div><div class="vctx"></div><div class="vcsw"><span class="pbtunel">Voice commands</span><button type="button" class="tsw" role="switch" aria-checked="true" aria-label="Voice commands" title="Turn voice commands off - on again in Settings"><i></i></button></div><button type="button" class="vcoff" aria-label="Stop listening" title="Stop listening - voice commands off until turned on again in Settings"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button>';
-  d.querySelector(".vcoff").onclick=e=>{ e.stopPropagation(); vcPause(); };
+  d.innerHTML='<div class="vcmic"><svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg></div><div class="vctx"></div><div class="vcsw"><span class="pbtunel">Voice commands</span><button type="button" class="tsw" role="switch" aria-checked="true" aria-label="Voice commands" title="Turn voice commands off - on again in Settings"><i></i></button></div><button type="button" class="vcoff" aria-label="Cancel" title="Cancel this command"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button>';
+  d.querySelector(".vcoff").onclick=e=>{ e.stopPropagation(); vcDismiss(); };
   // the switch: slides off, then voice commands go off for good (until switched on again in Settings)
   const sw=d.querySelector(".vcsw .tsw"), off=e=>{ e.stopPropagation(); if(sw.getAttribute("aria-checked")!=="true") return; sw.setAttribute("aria-checked","false"); setTimeout(()=>{ vcSet(false); vcPause(); },260); };
   sw.onclick=off; d.querySelector(".vcsw .pbtunel").onclick=off;
@@ -14658,6 +14658,14 @@ function vcPause(){
   document.querySelectorAll("#vcSel button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v==="off")));
   clearTimeout(VCU.t); VCU.state=""; if(VCU.el) VCU.el.className="vcov";
 }
+/* The screen's X: this one command put away, nothing done, voice commands still on. Words still being said when it
+   is pressed are let go (up to the end of what is being said, 8 s at most) so they run nothing and bring nothing up. */
+function vcDismiss(){
+  VC.wake=-1e9; vcSpeech(false);
+  if(VC.part) VC.skip=performance.now()+8000;
+  clearTimeout(VCU.t); VCU.state=""; if(VCU.el) VCU.el.className="vcov";
+}
+const vcSkipping=()=>VC.skip&&performance.now()<VC.skip;
 let VC_MODEL=null;
 async function vcModel(){
   if(VC_MODEL) return VC_MODEL;
@@ -14688,8 +14696,8 @@ async function vcStart(){
     if(!VC.on||tok!==VC.tok){ st.getTracks().forEach(t=>t.stop()); return; }
     const ctx=new AudioContext(), src=ctx.createMediaStreamSource(st);
     const rec=new model.KaldiRecognizer(ctx.sampleRate,JSON.stringify(vcPhrases().concat(["[unk]"])));
-    rec.on("result",m=>{ const t=m.result&&m.result.text; if(t) vcHeard(t); });
-    rec.on("partialresult",m=>{ const p=m.result&&m.result.partial; if(p) vcPartial(p); });   // the screen dims as "Sonoscope" is said
+    rec.on("result",m=>{ const t=m.result&&m.result.text; VC.part=""; if(vcSkipping()){ VC.skip=0; return; } VC.skip=0; if(t) vcHeard(t); });
+    rec.on("partialresult",m=>{ const p=m.result&&m.result.partial; VC.part=p||""; if(p&&!vcSkipping()) vcPartial(p); });   // the screen dims as "Sonoscope" is said
     const sp=ctx.createScriptProcessor(4096,1,1);
     sp.onaudioprocess=e=>{ try{ rec.acceptWaveformFloat(e.inputBuffer.getChannelData(0),ctx.sampleRate); }catch(err){} };
     src.connect(sp); sp.connect(ctx.destination);
