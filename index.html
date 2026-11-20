@@ -23792,7 +23792,12 @@ window.sfAnalyze=async(x,yieldFn)=>{
    Analyze, which takes the clicks out of the sound first. */
 let PRE=null, PRE_USE=true, PRE_WARM=false;   // PRE_WARM: the models' programs built (bpWarm)
 const PRE_EVERY=4, PRE_EVERY_LIVE=1.5, PRE_MARGIN=0.25, PRE_BLOCK=128;   // PRE_BLOCK: the trained model's frames at a time (sfStream)
-const preIdle=()=>new Promise(r=>(window.requestIdleCallback||(f=>setTimeout(()=>f({timeRemaining:()=>8}),16)))(r,{timeout:400}));
+/* While a take records the page is seldom idle - the trace and the staff are drawn every frame - and waiting for an
+   idle moment (up to 400 ms) left the analysis about 2 ms of work a second; it fell further and further behind the
+   playing and the staff stopped being written until a pause. So while recording it waits at most PRE_IDLE_REC ms
+   and, given no idle time, takes PRE_SLICE_REC ms anyway: enough to keep up, a small part of each second. */
+const PRE_IDLE_REC=50, PRE_SLICE_REC=5;
+const preIdle=(ms=400)=>new Promise(r=>(window.requestIdleCallback||(f=>setTimeout(()=>f({timeRemaining:()=>8}),16)))(r,{timeout:ms}));
 const preSleep=ms=>new Promise(r=>setTimeout(r,ms));
 window.preStart=L=>{
   window.preDrop();
@@ -23855,15 +23860,15 @@ async function preLoop(P){
       P.reading=true; try{ await preRead(P); } finally{ P.reading=false; }
       continue;
     }
-    const d=await preIdle();
+    const d=await preIdle(st==="recording"? PRE_IDLE_REC : 400);
     if(PRE!==P||P.hold) break;
-    // while recording only the idle part of a frame; afterwards more at a time
-    const until=performance.now()+(st==="recording"? Math.max(2,Math.min(8,d.timeRemaining())) : 30);
+    // while recording the idle part of a frame (a short slice when there is none); afterwards more at a time
+    const until=performance.now()+(st==="recording"? Math.max(d.didTimeout? PRE_SLICE_REC : 2,Math.min(8,d.timeRemaining())) : 30);
     let more;
     P.busy=preWork(P,until,{async:true,block:PRE_BLOCK});
     try{ more=await P.busy; } finally{ P.busy=null; }
     // the live view's recent past, redrawn from what is done (preFix)
-    if(PRE_FIX&&LV===P.L&&(st==="recording"||st==="paused")){ const d2=await preIdle(); if(PRE===P&&!P.hold) preFix(P); }   // paused too: the notes still being found are written
+    if(PRE_FIX&&LV===P.L&&(st==="recording"||st==="paused")){ const d2=await preIdle(st==="recording"? PRE_IDLE_REC : 400); if(PRE===P&&!P.hold) preFix(P); }   // paused too: the notes still being found are written
     if(!more) await preSleep(st==="recording"? 400 : 250);
   }
 }
