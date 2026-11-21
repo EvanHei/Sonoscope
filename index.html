@@ -4187,14 +4187,16 @@ function measureNotes(notes,midi,frames,x,fft,re,im,hann){
       // the one found most often wins.
       // A note too short to hold two strings is a slide from one to the next.
       if(INSTR.manyPart){
-        const got={}, step=Math.max(1,Math.floor(core.length/OCT_FRAMES));
+        const got={}, wk={}, step=Math.max(1,Math.floor(core.length/OCT_FRAMES));
         let n=0;
         for(let q=0;q<core.length;q+=step){
           const j=core[q], so=specAt(x,j*HOP+WIN/2,fft,re,im,hann,magO);
+          PO_WEAK=null;
           const d=dsFromMag(so.mag,so.binHz,so.half,so.mx,frames[j].f0,S.aref);
           n++;
           // a "partner" under 70 cents from the note itself is its own peak smeared by vibrato
           if(d.second&&d.second.midi!==nt.target&&!(Math.abs(d.second.midi+(d.second.cents||0)/100-nt.target-nt.cents/100)<0.7)){ const g=got[d.second.midi]||(got[d.second.midi]={c:0,s:d.second}); g.c++; }
+          else if(!d.second&&PO_WEAK){ const w=wk[PO_WEAK.midi]||(wk[PO_WEAK.midi]={c:0,r:[]}); w.c++; w.r.push(PO_WEAK.r); }
         }
         const best=Object.values(got).sort((a,b)=>b.c-a.c)[0];
         const nbr=o=>{ if(!o) return null; const g=Math.min(Math.abs(o.idx[0]-nt.idx[nt.idx.length-1]),Math.abs(nt.idx[0]-o.idx[o.idx.length-1]))*HOP/SR; return g<=0.15? Math.round(median(o.idx.map(i=>midi[i]).filter(isFinite))) : null; };
@@ -4205,6 +4207,7 @@ function measureNotes(notes,midi,frames,x,fft,re,im,hann){
         // there across a single note is a string ringing in sympathy.
         nt.second= !held? null : nt.second? (nt.second.midi===best.s.midi? nt.second : best.s)
                   : Math.abs(best.s.midi-nt.target)===12? best.s : null;
+        if(!nt.second&&WEAK_ON) nt.second=weakPartner(nt,wk,n,[nbr(notes[ni-1]),nbr(notes[ni+1])],sp);
         if(nt.second) nt.multi=true;
         else if(nt.dur<PAIR_MIN) nt.multi=false;
       }
@@ -5229,6 +5232,28 @@ const OCT_LINE=1.1;              // the lift, over a whole note, that beside an 
 const PAIR_VOTE=0.3;             // share of a note's frames its partner has to be found in (Analyze)
 const PAIR_BLEED=0.6;            // the same share, when that partner is the note just before or after: a slur running over
 const PAIR_MIN=0.1;              // seconds: a note shorter has no partner - a slide between two notes
+/* A partner under its bar on every frame can still be a voice. On a player's recordings (MusicNet, Bach's fourth suite)
+   the upper note of a held double stop often sits 15-25 dB under the lower - Bb3 over F3, A3 over F3 - and the search
+   named it as its best candidate on frame after frame, steady or growing, at 0.3-0.9 of its bar. A string left ringing
+   or a reverb tail is turned away the same way but fades through the note; a played note does not. So a candidate found
+   under its bar on WEAK_VOTE of a note's frames, at WEAK_R of the bar or more on the median, that does not fade (its last
+   third at WEAK_FADE of its first or more), is the partner - not on a short note, not a second or an octave (each has its
+   own tests), not the note just before or after, not an open string (they ring on by themselves). */
+var WEAK_ON=true;
+const WEAK_VOTE=0.7, WEAK_R=0.4, WEAK_FADE=0.7, WEAK_MIN=0.5;
+function weakPartner(nt,wk,n,nbrs,sp){
+  if(!(nt.dur>=WEAK_MIN)||n<5) return null;
+  const w=Object.entries(wk).map(([m,v])=>({m:+m,...v})).sort((a,b)=>b.c-a.c)[0];
+  if(!w||w.c<Math.ceil(n*WEAK_VOTE)) return null;
+  const st=Math.abs(w.m-nt.target);
+  if(st<=2||st%12===0||nbrs.includes(w.m)||INSTR.open.includes(w.m)||!playable(Math.min(w.m,nt.target),Math.max(w.m,nt.target))) return null;
+  const r=w.r.slice().sort((a,b)=>a-b), med=r[r.length>>1];
+  if(!(med>=WEAK_R)) return null;
+  const k=Math.max(1,Math.floor(w.r.length/3)), mean=a=>a.reduce((p,q)=>p+q,0)/a.length;
+  if(mean(w.r.slice(-k))<WEAK_FADE*mean(w.r.slice(0,k))) return null;
+  const tg=S.aref*Math.pow(2,(w.m-69)/12), f=(sp&&refinePeak(sp.mag,sp.binHz,sp.half,tg))||tg, m2=69+12*Math.log2(f/S.aref);
+  return Math.abs(m2-w.m)<0.5? {f,midi:w.m,name:noteName(w.m),cents:(m2-w.m)*100} : {f:tg,midi:w.m,name:noteName(w.m),cents:0};
+}
 /* The strongest bin within two of f, with its frequency and height taken from
    a parabola through the log magnitudes. A Hann window's main lobe is very
    nearly a parabola there, so this lands a good deal closer than fitting the
@@ -5374,7 +5399,11 @@ function inPass(lo,hi){
   if(P&&(P.lo===lo||P.lo===hi||P.hi===lo||P.hi===hi)) return false;
   return !LV.m1h.slice(-Math.round(PASS_FRESH*LV_HZ)).includes(other);
 }
+/* The best candidate the last search turned away for being under its bar: {midi, r (its sum over the bar), n, st}.
+   Analyze weighs it over a whole note (WEAK_*). */
+var PO_WEAK=null;
 function partnerOf(pk,f1,binHz,half,mx,aref,live,cx){
+  PO_WEAK=null;
   const own=p=>{ const k=Math.round(p.f/f1); return k>=1&&k<=30&&Math.abs(p.f-k*f1)<hTol(k,f1,binHz); };
   const m1=Math.round(69+12*Math.log2(f1/aref));
   // The tracked note's own strength is the yardstick for a partner. Measuring
@@ -5516,7 +5545,8 @@ function partnerOf(pk,f1,binHz,half,mx,aref,live,cx){
   // its fundamental, which no bowed note is. Played, it shows its own partials.
   if(INSTR.manyPart&&st<=2&&best.n<3) return null;
   const tenK= live&&(st===15||st===16)&&INSTR.manyPart&&!!(cx&&cx.known&&cx.known.includes(m1+best.st));
-  if(best.s<(st===7? DS_RATIO_5TH : st===5? INSTR.ratio4 : st===15||st===16? INSTR.ratio10 : DS_RATIO)*Math.min(many? (imp&&live? 0.3 : 0.5) : imp4? 0.5 : ten3? 0.75 : 1, tenK? TEN_KNOWN : 1)*yard(best.f)) return null;
+  const barS=(st===7? DS_RATIO_5TH : st===5? INSTR.ratio4 : st===15||st===16? INSTR.ratio10 : DS_RATIO)*Math.min(many? (imp&&live? 0.3 : 0.5) : imp4? 0.5 : ten3? 0.75 : 1, tenK? TEN_KNOWN : 1)*yard(best.f);
+  if(best.s<barS){ PO_WEAK={midi:Math.round(69+12*Math.log2(best.f/aref)), r:barS>0? best.s/barS : 0, n:best.n, st:best.st}; return null; }
   const near=Math.round(69+12*Math.log2(best.f/aref));
   // The search runs on a grid of exact semitones from the tracked note, so the
   // grid point carries that note's tuning, not the partner's. Read the cents
