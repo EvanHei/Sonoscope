@@ -8124,7 +8124,7 @@ function liveFrame(){
   const an=LV.an, b=LV.buf;
   an.getFloatTimeDomainData(b);
   const t=(performance.now()-LV.t0)/1000;
-  $("recClock").textContent=fmtS(t);
+  setTx($("recClock"),fmtS(t));
   // A metronome click where the pitch is read: the last reading stands
   if(ckLive(b)){
     const h=LV.hist[LV.hist.length-1];
@@ -8240,11 +8240,11 @@ function liveFrame(){
   }
 
   // readouts
-  $("lvNote").textContent= voiced? liveName(Math.round(midi)) : NA;   // in the key
+  setTx($("lvNote"), voiced? liveName(Math.round(midi)) : NA);   // in the key
   // a no-break space, not nothing: an empty element has no line box, and the
   // readouts under it would climb into the gap every time the bow leaves the
   // string. A plain space collapses to nothing as well, so it has to be this.
-  $("lvHz").textContent= voiced? f0.toFixed(1)+" Hz" : " ";
+  setTx($("lvHz"), voiced? f0.toFixed(1)+" Hz" : " ");
   const ec= voiced? easeCol("",cents,Math.round(midi)) : NaN;
   noteCol($("lvNote"),ec);
   liveStaff("", voiced? Math.round(midi) : NaN, ec);
@@ -8267,10 +8267,14 @@ function liveFrame(){
   const mo=new MutationObserver(pairPaint);
   for(const id of ["lvNote","lvNote2"]){ const e=$(id); if(e) mo.observe(e,{childList:true,characterData:true,subtree:true}); }
   pairPaint(); }
+/* Both only touch the page when something changes. The readouts are written 50 times a second and mostly say what
+   they said; written all the same, each write had the browser work out the page's styles again. */
 function noteCol(el,c){
-  for(let i=0;i<CBAND.length;i++) el.classList.remove("cb"+i);
-  if(isFinite(c)) el.classList.add("cb"+centsBand(c));
+  const want= isFinite(c)? "cb"+centsBand(c) : null, L=el.classList;
+  for(let i=0;i<CBAND.length;i++){ const k="cb"+i; if(k!==want&&L.contains(k)) L.remove(k); }
+  if(want&&!L.contains(want)) L.add(want);
 }
+function setTx(el,s){ if(el&&el.textContent!==s) el.textContent=s; }
 /* The single-note reading eased the way the double-stop rails ease theirs, so
    the colour does not flicker between bands on every frame. A new note starts
    fresh. */
@@ -8305,7 +8309,7 @@ function liveStacked(voiced,aref,db,hi,lo,hiM,loM){
   // A held pair keeps both names up through a frame where a voice could not be
   // read; the numbers simply hold until the next reading.
   const fill=(sfx,on,m,c,arr)=>{
-    $("lvNote"+sfx).textContent= on? liveName(m) : NA;
+    setTx($("lvNote"+sfx), on? liveName(m) : NA);
     if(!on){ noteCol($("lvNote"+sfx),NaN); liveStaff(sfx,NaN,NaN); }
     if(on&&!isFinite(c)){ liveStaff(sfx,m,LV.ease[sfx]); return; }
     if(on){
@@ -8314,10 +8318,10 @@ function liveStacked(voiced,aref,db,hi,lo,hiM,loM){
       LV.ease[sfx]=c;
       noteCol($("lvNote"+sfx),c);
       liveStaff(sfx,m,c);
-      $("lvHz"+sfx).textContent=(aref*Math.pow(2,(m-69)/12+c/1200)).toFixed(1)+" Hz";
+      setTx($("lvHz"+sfx),(aref*Math.pow(2,(m-69)/12+c/1200)).toFixed(1)+" Hz");
     }else{
       LV.ease[sfx]=NaN;
-      $("lvHz"+sfx).textContent=" ";
+      setTx($("lvHz"+sfx)," ");
     }
     // each voice's fit on a frame of its own (see VIB_EVERY)
     const C=LV.vibC||(LV.vibC={});
@@ -9400,9 +9404,13 @@ $("rsCopy").onclick=async()=>{
    ===================================================================== */
 function fit(cv){
   const dpr=window.devicePixelRatio||1;
-  const w=cv.clientWidth||800, h=cv.clientHeight||300;
-  cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
-  const c=cv.getContext("2d");
+  const w=cv.clientWidth||800, h=cv.clientHeight||300, W=Math.round(w*dpr), H=Math.round(h*dpr);
+  // the same size as before: cleared and its settings put back (reset) rather than made again, which setting its
+  // size does even to the same size - every frame, for the canvases drawn on every frame
+  const c0= cv.width===W&&cv.height===H&&cv.getContext("2d");
+  if(c0&&c0.reset) c0.reset();
+  else{ cv.width=W; cv.height=H; }
+  const c=c0||cv.getContext("2d");
   if(c) c.setTransform(dpr,0,0,dpr,0,0);
   return {c,w,h};
 }
@@ -13230,12 +13238,14 @@ const lay2On=()=>$("vMain").classList.contains("lay2");
 const LVM={tgt:{},pos:{},raf:0,t:0};
 function lvMeter(sfx,m,c){
   const el=$("lvTick"+sfx); if(!el) return;
-  if(!isFinite(m)){ el.classList.add("off"); LVM.tgt[sfx]=0; }
+  // (each written only when it changes: see noteCol)
+  if(!isFinite(m)){ el.classList.toggle("off",true); LVM.tgt[sfx]=0; }
   else{
-    el.classList.remove("off");
-    if(isFinite(c)){ LVM.tgt[sfx]=clamp(c,-50,50); el.lastElementChild.style.background=bandFill(c);
+    el.classList.toggle("off",false);
+    if(isFinite(c)){ LVM.tgt[sfx]=clamp(c,-50,50);
+      const bg=bandFill(c), b=el.lastElementChild; if(b._bg!==bg){ b.style.background=bg; b._bg=bg; }
       // the cents over the bar, signed, as the lanes write them
-      const r=Math.round(c); $("lvCt"+sfx).textContent=(r>0? "+" : r<0? "−" : "")+Math.abs(r); }
+      const r=Math.round(c); setTx($("lvCt"+sfx),(r>0? "+" : r<0? "−" : "")+Math.abs(r)); }
   }
   if(!LVM.raf&&lay2On()){ LVM.t=performance.now(); LVM.raf=requestAnimationFrame(lvMeterFrame); }
 }
@@ -13246,8 +13256,8 @@ function lvMeterFrame(now){
     const el=$("lvTick"+sfx), tg=LVM.tgt[sfx]; if(!el||tg==null) continue;
     const p=LVM.pos[sfx]??tg, q=p+(tg-p)*a;
     LVM.pos[sfx]=q; if(Math.abs(tg-q)>0.05) moving=true;
-    const w=el.parentElement.clientWidth;
-    el.style.transform="translateX("+(q/100*w).toFixed(1)+"px)";
+    const w=el.parentElement.clientWidth, tf="translateX("+(q/100*w).toFixed(1)+"px)";
+    if(el._tf!==tf){ el.style.transform=tf; el._tf=tf; }
   }
   LVM.raf= moving&&lay2On()? requestAnimationFrame(lvMeterFrame) : 0;
 }
@@ -13264,12 +13274,21 @@ const LVS={el:new Map(),html:new Map(),follow:true,lv:null,auto:0,drag:false,sig
 const LVS_FADE_MS=520, LVS_FADE_STEP=70, LVS_FADE_MAX=700;   // a note's fade in; a batch's notes this far apart, all begun within the last
 const LVS_LH=ST_G*11.6, LVS_TOP=30;   // LVS_TOP: room over the first line, clear of the take's clock in the corner                   // one line of music, the room above and the cents under
 // drawn again from nothing (a switch of layout), the take's notes kept
+/* Everything a note's drawing on the live staff is made from (noteSVG with bot0, top0 fixed), so a note whose key
+   is unchanged is drawn as it was. The colours go by the theme, so a new theme starts the memo afresh. */
+LVS.memo=new Map();
+function lvNoteMemoKey(e){
+  const n=e.n;
+  if(LVS.memoTh!==TH||LVS.memoRhy!==ST_RHY){ LVS.memo.clear(); LVS.memoTh=TH; LVS.memoRhy=ST_RHY; }
+  return [n.i,e.k,e.accW,e.shift,e.w,n.xWrong,n.xWrongV,n.xWrong!=null? xWritten(e.k) : "",e.rp&&e.rp.open?1:0].join(",")+"|"+
+    e.heads.map(h=>[h.name,h.s,h.dx,h.col,h.acc,h.show,isFinite(h.cents)? Math.round(h.cents)+"/"+centsBand(h.cents) : "-",h.midi,h.ms].join(",")).join(";");
+}
 function lvStaffRedraw(){
   LVS.el.clear(); LVS.html.clear(); LVS.sig=""; LVS.quiet=true;   // the same take drawn again: shown as it was, no fading in
   const svg=$("lvStaffSvg"); if(svg) svg.innerHTML="";
 }
 function lvStaffReset(){
-  LVS.el.clear(); LVS.html.clear(); LVS.sig=""; LVS.follow=true; LVS.bg=[]; LVS.bgRev=0; LVS.bgEnd=0; LVS.del=(LV&&LV.importDel)? LV.importDel.slice() : []; LVS.fix=null; LVS.fixN=0; LVS.xNames=[]; LVS.kidx=null;
+  LVS.el.clear(); LVS.html.clear(); LVS.memo.clear(); LVS.sig=""; LVS.follow=true; LVS.bg=[]; LVS.bgRev=0; LVS.bgEnd=0; LVS.del=(LV&&LV.importDel)? LV.importDel.slice() : []; LVS.fix=null; LVS.fixN=0; LVS.xNames=[]; LVS.kidx=null;
   lvSumPaint([]);
   const svg=$("lvStaffSvg"); if(svg) svg.innerHTML="";
   const b=$("lvFollow"); if(b) b.hidden=true;
@@ -13350,10 +13369,17 @@ function lvStaffDraw(N){
       if(it.t==="pz"){ want.set("P"+it.p.toFixed(2),{h:'<line class="stpz" x1="7" x2="7" y1="'+f1(top0-8)+'" y2="'+f1(bot0+8)+'"/>',x:it.x,y:dy}); return; }
       if(it.t==="clef"){ want.set("T"+it.at+"|"+it.clef,{h:clefSVG(it.clef,6,bot0,0.78),x:it.x,y:dy}); return; }
       const e=ev[it.i];
-      // the bin over the note, as on Analyze: a note struck here is struck from Analyze too (lvNoteDel)
-      let g=noteSVG(e,0,bot0,0,top0-30,bot0+ST_G*5,0);
-      const T=[]; g=g.replace(/<text class="stc[^>]*>[^<]*<\/text>/g,m=>{ T.push(m); return ""; });
-      g=g.replace(/<\/g>$/,'<g class="lvcy">'+T.join("")+'</g></g>');
+      // the bin over the note, as on Analyze: a note struck here is struck from Analyze too (lvNoteDel). A note
+      // drawn as it was last time is not drawn again (lvNoteMemo): with a long take that was most of the work.
+      const mk=lvNoteMemoKey(e);
+      let g=LVS.memo.get(e.n.key);
+      if(!g||g.k!==mk){
+        let s=noteSVG(e,0,bot0,0,top0-30,bot0+ST_G*5,0);
+        const T=[]; s=s.replace(/<text class="stc[^>]*>[^<]*<\/text>/g,m=>{ T.push(m); return ""; });
+        s=s.replace(/<\/g>$/,'<g class="lvcy">'+T.join("")+'</g></g>');
+        g={k:mk,s}; LVS.memo.set(e.n.key,g);
+      }
+      g=g.s;
       want.set("n"+e.n.key,{h:g,x:it.x,y:dy,cy,prov:!!e.n.prov});
     });
   });
@@ -13362,9 +13388,15 @@ function lvStaffDraw(N){
   const now=performance.now(), quiet=!!LVS.quiet; LVS.quiet=false;
   let j=0;
   const fade=(g,at)=>{ g.classList.add("lvnew"); g.style.animationDelay=Math.round(at-now)+"ms"; g._fade=at; };
+  // Only what has moved is touched: setting a piece's place, or the drawing's size, even to what it was, had the
+  // browser lay the whole staff out again - 5 ms a time with 250 notes on it, more the longer the take
   const place=(g,p)=>{
-    g.style.transform="translate("+f1(p.x)+"px,"+f1(p.y)+"px)";
-    if(p.cy!=null){ const c=g.querySelector(".lvcy"); if(c) c.style.transform="translateY("+f1(p.cy)+"px)"; }
+    const tf="translate("+f1(p.x)+"px,"+f1(p.y)+"px)";
+    if(g._tf!==tf){ g.style.transform=tf; g._tf=tf; }
+    if(p.cy!=null){
+      const c= g._cyEl&&g._cyEl.isConnected&&g.contains(g._cyEl)? g._cyEl : (g._cyEl=g.querySelector(".lvcy")), ty="translateY("+f1(p.cy)+"px)";
+      if(c&&c._tf!==ty){ c.style.transform=ty; c._tf=ty; }
+    }
   };
   const gone=g=>{ if(quiet){ g.remove(); return; } g.classList.remove("lvnew"); g.style.animationDelay=""; g.classList.add("lvout"); setTimeout(()=>g.remove(),320); };
   for(const k of [...LVS.el.keys()]) if(!want.has(k)){ gone(LVS.el.get(k)); LVS.el.delete(k); LVS.html.delete(k); }
@@ -13386,9 +13418,9 @@ function lvStaffDraw(N){
     }
     LVS.el.set(k,g); LVS.html.set(k,p.h);
   }
-  const H=LVS_TOP+rows.length*LVS_LH;
-  svg.setAttribute("viewBox","0 0 "+f1(W)+" "+f1(H));
-  svg.style.height=f1(H*sc)+"px";
+  const H=LVS_TOP+rows.length*LVS_LH, vb="0 0 "+f1(W)+" "+f1(H), sh=f1(H*sc)+"px";
+  if(svg.getAttribute("viewBox")!==vb) svg.setAttribute("viewBox",vb);
+  if(svg._h!==sh){ svg.style.height=sh; svg._h=sh; }
   if(LVS.follow&&!(LV&&LV.paused&&(PB.on||PB.at>0))) lvStaffEnd();   // not while a paused take plays back
 }
 /* The take's two totals over the buttons, as at the foot of Analyze's sidebar: the mean miss of the notes written,
@@ -13451,7 +13483,9 @@ async function pzaStart(L,buf){
   try{
     S.clickInfo=null;
     if(S.liveClicks){ try{ S.clickInfo=await clickClean(buf,S.liveClicks); }catch(err){ S.clickInfo={error:String(err)}; } }
-    await analyze(buf,true);
+    // what the analysis run while recording has done, finished on the take so far, for analyze to find (preSnap)
+    else if(window.preSnap){ try{ PZA.snapOk=await window.preSnap(L,buf); }catch(err){ PZA.snapOk=String(err); } }
+    if(tok===PZA.tok&&L.paused) await analyze(buf,true);   // (recording on again meanwhile: not read)
   }catch(err){ if(isCancel(err)) BZ_STOP=false; else window.pzaErr=String(err&&err.stack||err); }
   finally{ ANA_QUIET=false; PZA.run=false; }
   if(tok!==PZA.tok||LV!==L||!L.paused||!S.notes||!S.notes.length){ if(tok===PZA.tok){ PZA.gaveUp=true; lvSpinSet(); } return; }
@@ -15429,7 +15463,11 @@ function sfStream(tf,K,sr){
     result(){ return out; },
     // the frames worked out so far, {hz, conf, n}: the same as result()'s, frame for frame
     sofar(){ return C? C.sofar() : null; },
-    dispose(){ if(L){ L.forEach(l=>{ l.f.dispose(); l.b.dispose(); }); L=null; } }
+    dispose(){ if(L){ L.forEach(l=>{ l.f.dispose(); l.b.dispose(); }); L=null; } },
+    // a copy of what is done so far, to be finished on its own (a fin feed) while this one goes on - the take so far
+    // read at a pause, recording going on after it. Null once this one is finished.
+    clone(){ if(out) return null; const c=sfStream(tf,K,sr); c._load(x16.slice(0,n16),n16,F.slice(),nF,lg.slice(),mx.slice(),nB,C? C.clone() : null); return c; },
+    _load(a,b,c,d,e,f,g,h){ x16=a; n16=b; F=c; nF=d; lg=e; mx=f; nB=g; C=h; }
   };
 }
 // confidence: the maxima and each frame's mean level, mixed over three frames; and each frame's
@@ -15455,7 +15493,9 @@ function confer(o={}){
         conf[t]= fq[ka]>=fmin&&fq[ka]<=fmax? 1/(1+Math.exp(-logit)) : 0; }
     },
     sofar:()=>({hz,conf,n}),
-    result:T=>({hz:hz.slice(0,T),conf:conf.slice(0,T)})
+    result:T=>({hz:hz.slice(0,T),conf:conf.slice(0,T)}),
+    clone(){ const c=confer(o); c._load(feat.slice(),nf,hz.slice(),conf.slice(),n); return c; },
+    _load(a,b,c,d,e){ feat=a; nf=b; hz=c; conf=d; n=e; }
   };
 }
 let KP=null;
@@ -23907,7 +23947,10 @@ function bpStream(model){
       return true;
     },
     result(){ return out; },
-    sofar(){ return {frames,onsets,contours}; }
+    sofar(){ return {frames,onsets,contours}; },
+    // a copy of what is done so far, to be finished on its own (see sfStream's)
+    clone(){ if(out) return null; const c=bpStream(model); c._load(s,h,frames,onsets,contours); return c; },
+    _load(a,b,c,d,e){ s=a; h=b; for(let i=0;i<c.length;i++){ frames.push(c[i]); onsets.push(d[i]); contours.push(e[i]); } }
   };
 }
 window.bpStream=bpStream;
@@ -23992,7 +24035,8 @@ window.preStart=L=>{
 window.preDrop=()=>{ if(PRE&&PRE.sf) PRE.sf.dispose(); PRE=null; };
 // for the tests: switch it, and forget the last take's results
 window.preUse=v=>{ PRE_USE=v; };
-window.preInfo=()=>PRE&&{fixDt:PRE.fixDt, yin:PRE.yin&&PRE.yin.get().n, safe:PRE.safe, len:PRE.x&&PRE.x.length, fin:PRE.fin, done:PRE.done, hold:!!PRE.hold};
+window.preInfo=()=>PRE&&{fixDt:PRE.fixDt, yin:PRE.yin&&PRE.yin.get().n, safe:PRE.safe, len:PRE.x&&PRE.x.length, fin:PRE.fin, done:PRE.done, hold:!!PRE.hold, tail:PRE.wm===false? "off" : PRE.wm&&PRE.wm.raw? "on" : "-"};
+window.preX=()=>PRE&&PRE.x;   // for the tests: the signal read so far
 window.anaForget=()=>{ BP_LAST=SF_LAST=null; YIN_LAST=MONO_LAST=RF_LAST=null; };
 // the recording so far, read back and brought down to the analysis rate
 async function preRead(P){
@@ -24001,13 +24045,176 @@ async function preRead(P){
   P.readAt=performance.now(); P.stillRead= st!=="recording";
   const blob=new Blob(P.L.chunks,{type:mr.mimeType||"audio/webm"});
   if(blob.size===P.size&&P.fin===(st==="inactive")) return;
-  // too little yet to decode: the next read
-  let buf; try{ buf=await takeAudio(P.L,blob); }catch(err){ return; }
-  if(!buf) return;
-  const x=await toMono(buf);
+  // only what is new, decoded on to what was read before (preTail); else the whole of it again
+  let x=null;
+  if(P.wm!==false&&!P.L.prefix){ try{ x=await preTail(P,blob); }catch(err){ P.wm=false; x=null; } }
+  if(!x){
+    // too little yet to decode: the next read
+    let buf; try{ buf=await takeAudio(P.L,blob); }catch(err){ return; }
+    if(!buf) return;
+    x=await toMono(buf);
+    if(P.wm&&!P.L.prefix) wmKeep(P.wm,buf,0);
+  }
   if(PRE!==P) return;
   P.size=blob.size; P.x=x; P.fin= st==="inactive";
   P.safe= P.fin? x.length : Math.max(0,x.length-Math.round(PRE_MARGIN*SR));
+}
+/* Reading the recording again from its start every PRE_EVERY_LIVE s cost more the longer the take ran - decoding it
+   and bringing it down to the analysis rate took 60 ms at half a minute in, 700 ms at two and a half minutes, and
+   the background analysis (and the staff it writes) fell further behind - so only the new part is read. The
+   recorder's file (WebM, Opus in it) is a header and then packets of sound, each its own length; the header and the
+   packets from PRE_WARM_DEC s before the part needed make a file of their own, which decodes to the very samples the
+   whole file has there once the decoder has settled (exactly, after a second: measured). That is brought down to the
+   analysis rate from a point PRE_WARM_MONO s before what the analysis has taken (the filters settle in a few ms) and
+   put on in place of the rest; the analysis rate's samples line up with the recording's there (a multiple of g).
+   Downsampled in pieces the samples differ from the whole done at once by a millionth, so Analyze takes this
+   signal too (preFinish) rather than one made again from the whole. Anything that does not check out - another
+   kind of file, a decode that does not match the last one where they overlap - and it is read whole as before. */
+const PRE_WARM_DEC=1.5, PRE_WARM_MONO=0.25, PRE_TAIL_MIN=8;
+// the recording's packets: where each starts in the file and in the sound (48 kHz samples)
+function wmParse(W,u,base){
+  const vint=p=>{ const b=u[p]; if(b===undefined) return null; let l=1,m=0x80; while(l<=8&&!(b&m)){ l++; m>>=1; } if(l>8||p+l>u.length) return null;
+    let v=b&(m-1); for(let i=1;i<l;i++) v=v*256+u[p+i]; return {l,v,unk:v===Math.pow(2,7*l)-1}; };
+  const eid=p=>{ const b=u[p]; if(b===undefined) return null; const l= b&0x80? 1 : b&0x40? 2 : b&0x20? 3 : b&0x10? 4 : 0; if(!l||p+l>u.length) return null;
+    let v=0; for(let i=0;i<l;i++) v=v*256+u[p+i]; return {l,v}; };
+  // an Opus packet's length from its first byte (and its second, for code 3)
+  const ns=(toc,b1)=>{ const cfg=toc>>3, ms= cfg<12? [10,20,40,60][cfg&3] : cfg<16? [10,20][cfg&1] : [2.5,5,10,20][cfg&3], c=toc&3;
+    return (c===0? 1 : c<3? 2 : (b1&0x3F))*ms*48; };
+  let p=0;
+  for(;;){
+    const I=eid(p); if(!I) break;
+    const S=vint(p+I.l); if(!S) break;
+    const hd=I.l+S.l;
+    // the segment and its clusters are gone into; their sizes are left open while recording
+    if(I.v===0x18538067||I.v===0x1F43B675){ if(I.v===0x1F43B675&&W.hdrEnd<0) W.hdrEnd=base+p; p+=hd; continue; }
+    if(S.unk) throw new Error("an open-ended element");
+    if(p+hd+S.v>u.length) break;                       // not all here yet: the next read
+    if(I.v===0x1A45DFA3&&base+p!==0) throw new Error("a second file");
+    if(I.v===0xE7){ let v=0; for(let i=0;i<S.v;i++) v=v*256+u[p+hd+i]; W.cl=v; }
+    else if(I.v===0xA3){ const d=p+hd; if(u[d]!==0x81) throw new Error("another track"); W.B.push({o:base+p,cl:W.cl,s:W.s}); W.s+=ns(u[d+4],u[d+5]); }
+    else if(I.v===0xA0) throw new Error("a block group");
+    p+=hd+S.v;
+  }
+  W.pp=base+p;
+}
+// the last few seconds decoded (its first channel), to check the next decode against; at: where buf starts in the sound
+// (a decode from part way in, at>0, is the same as the whole's only once settled: rawOk is where that is)
+function wmKeep(W,buf,at){
+  const n=Math.min(buf.length,Math.round((PRE_WARM_DEC+3)*buf.sampleRate));
+  W.raw=buf.getChannelData(0).slice(buf.length-n); W.rawAt=at+buf.length-n; W.sr=buf.sampleRate;
+  W.rawOk= at>0? Math.max(W.rawAt,at+buf.sampleRate) : W.rawAt;
+}
+async function preTail(P,blob){
+  const W=P.wm||(P.wm={hdr:null,hdrEnd:-1,pp:0,cl:0,s:0,B:[],raw:null,rawAt:0,sr:0,len:0});
+  if(blob.size>W.pp){
+    const u=new Uint8Array(await blob.slice(W.pp).arrayBuffer());
+    if(!W.pp&&!(u[0]===0x1A&&u[1]===0x45&&u[2]===0xDF&&u[3]===0xA3)) throw new Error("not WebM");
+    wmParse(W,u,W.pp);
+    if(!W.hdr&&W.hdrEnd>0) W.hdr=new Uint8Array(await blob.slice(0,W.hdrEnd).arrayBuffer());
+  }
+  // the first reads, short, are read whole (and checked against from then on)
+  const x0=P.x, R=W.sr;
+  if(!x0||!W.raw||!W.hdr||P.safe<PRE_TAIL_MIN*SR) return null;
+  const gcd=(a,b)=>b? gcd(b,a%b) : a, g=R/gcd(R,SR);
+  // where the new analysis-rate samples start: a point the two rates share, the filters' warm-up before what is taken
+  const a=Math.floor((P.safe/SR-PRE_WARM_MONO)*R/g)*g, k0=a*SR/R;
+  // the packet to decode from: the last one PRE_WARM_DEC s or more before that
+  const want=a*48000/R-PRE_WARM_DEC*48000;
+  let j=W.B.length-1; while(j>0&&W.B[j].s>want) j--;
+  const b0=W.B[j]; if(!b0||b0.s>want) return null;
+  const tc=new Uint8Array(8); for(let i=7,v=b0.cl;i>=0;i--){ tc[i]=v%256; v=Math.floor(v/256); }
+  const f=new Blob([W.hdr,new Uint8Array([0x1F,0x43,0xB6,0x75,0x01,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xE7,0x88]),tc,blob.slice(b0.o,W.pp)]);
+  const t=await ac().decodeAudioData(await f.arrayBuffer());
+  if(t.sampleRate!==R) throw new Error("another rate");
+  const off=Math.round(b0.s*R/48000);
+  // it must be the same sound the last read decoded, where the two overlap and this one has settled
+  const c0=t.getChannelData(0), i0=Math.max(off+Math.round(R),W.rawOk), i1=Math.min(W.rawAt+W.raw.length,off+t.length);
+  if(i1-i0<Math.round(0.2*R)||a<i0) throw new Error("too little overlap");
+  for(let i=i0;i<i1;i+=7) if(Math.abs(c0[i-off]-W.raw[i-W.rawAt])>1e-6) throw new Error("not the same sound");
+  // brought down to the analysis rate from a on, put on after the filters' warm-up
+  const sub=new AudioBuffer({length:off+t.length-a,sampleRate:R,numberOfChannels:t.numberOfChannels});
+  for(let c=0;c<t.numberOfChannels;c++) sub.copyToChannel(t.getChannelData(c).subarray(a-off),c);
+  const y=await toMono(sub), wm=Math.round(PRE_WARM_MONO*SR), k=k0+wm;
+  if(k>x0.length||y.length<=wm) return null;
+  // and the same signal as the last read's, where both have settled (a twentieth of a second in, the two differ by a millionth)
+  for(let i=k0+Math.round(0.05*SR);i<k;i+=3) if(Math.abs(x0[i]-y[i-k0])>1e-3) throw new Error("not the same signal");
+  const x=new Float32Array(k0+y.length);
+  x.set(x0.subarray(0,k)); x.set(y.subarray(wm),k);
+  wmKeep(W,t,off);
+  return x;
+}
+/* Analyze on a pause (pzaStart) read the take so far from nothing - the tracker, the two models and the spectrum check
+   over all of it, 17 s for a minute's take - while the analysis run as it was recorded had nearly all of it done. So
+   at a pause that is finished on the take so far: its signal (preRest), the tracker's and the spectrum check's last
+   frames read now, the two models' streams copied (clone) and the copies finished. Their results are left where
+   Analyze looks for its last take's (by the signal's key), and Analyze finds them done: 3.7 s for the same take.
+   The streams themselves go on when recording does. Nothing here unless all of it checks out. */
+window.preSnap=async(L,buf)=>{
+  const P=PRE;
+  // (what it returns says why, when it does nothing: for the tests)
+  if(!P||P.L!==L||!P.yin||!P.sf||!P.bp||!P.rf||L.clicks.length||P.done) return "no analysis";
+  for(let i=0;i<500&&(P.busy||P.reading);i++) await preSleep(20);
+  if(P.busy||P.reading||PRE!==P) return "busy";
+  let x=null; try{ x=await preRest(P,buf); }catch(err){ return String(err); }
+  if(!x) return "no signal";
+  const sf=P.sf.clone(), bp=P.bp.clone(); if(!sf||!bp) return "no copy";
+  const y=yinRest(P.yin,x);
+  const o={block:PRE_BLOCK,yieldFn:()=>new Promise(r=>setTimeout(r,0))};
+  await sf.feed(x,x.length,true,Infinity,o); const G=sf.result();
+  await bp.feed(x,x.length,true,Infinity); const B=bp.result();
+  if(!G||!B||PRE!==P) return "unfinished";
+  const R=rfRest(P.rf,x,y,G), key=bpKey(x);
+  YIN_LAST={key,...y}; SF_LAST={key,r:G}; BP_LAST={key,...B}; RF_LAST={key,...R}; MONO_LAST={buf,x};
+  return true;
+};
+// the tracker's frames read so far, and the rest of the take's read now, as a fin feed would - the stream left as it was
+function yinRest(Y,x){
+  const g=Y.get(), lim=Math.max(0,Math.floor((x.length-g.win)/HOP)+1), n0=Math.min(g.n,lim);
+  const f0=new Float32Array(Math.max(lim,1)), ap=new Float32Array(f0.length), rms=new Float32Array(f0.length);
+  f0.set(g.f0.subarray(0,n0)); ap.set(g.ap.subarray(0,n0)); rms.set(g.rms.subarray(0,n0));
+  const pitch=new Pitch();
+  for(let n=n0;n<lim;n++){ const p=pitch.frame(x,n*HOP); f0[n]=p.f0; ap[n]=p.ap; rms[n]=p.rms; }
+  return {f0,ap,rms,n:lim,win:g.win};
+}
+// the same for the spectrum check (rfStream's frame, on this thread), with the tracker's frames y and the model's G
+function rfRest(R0,x,y,G){
+  const g=R0.get(), nfft=g.nfft, win=g.win, n0=Math.min(g.n,y.n), rf=new Float32Array(Math.max(y.n,1));
+  rf.set(g.rf.subarray(0,n0));
+  const fft=new FFT(nfft), re=new Float64Array(nfft), im=new Float64Array(nfft), mag=new Float64Array(nfft/2), hann=new Float64Array(nfft);
+  for(let i=0;i<nfft;i++) hann[i]=0.5-0.5*Math.cos(2*Math.PI*i/nfft);
+  const Gn=G.hz.length;
+  for(let n=n0;n<y.n;n++){
+    const c=n*HOP+win/2, j=Math.round(c/SR*16000/256);
+    let f=y.f0[n];
+    if(f>0&&y.ap[n]<0.30){
+      const sp=specAt(x,c,fft,re,im,hann,mag), gz= j>=0&&j<Gn&&G.conf[j]>=SF_CONF&&G.hz[j]>0? G.hz[j] : 0;
+      if(gz) f=sfJump(f,gz);
+      f=realFund(sp.mag,sp.binHz,sp.half,sp.mx,f);
+      if(gz) f=sfJump(f,gz);
+      rf[n]=f;
+    }else rf[n]=NaN;
+  }
+  return {rf,n:y.n,nfft,win};
+}
+/* Analyze's signal: the whole take (buf, decoded whole) brought down to the analysis rate from just before where the
+   reading while recording had got to, and put on to that - the same sound, checked where the two overlap. Null when
+   there is nothing to put it on to. */
+async function preRest(P,buf){
+  const W=P.wm, x0=P.x;
+  if(!W||!W.raw||!x0||P.L.prefix||buf.sampleRate!==W.sr||P.safe<PRE_TAIL_MIN*SR) return null;
+  const R=buf.sampleRate, gcd=(a,b)=>b? gcd(b,a%b) : a, g=R/gcd(R,SR);
+  const c0=buf.getChannelData(0), i1=Math.min(W.rawAt+W.raw.length,buf.length);
+  if(i1-W.rawOk<Math.round(0.2*R)) return null;
+  for(let i=W.rawOk;i<i1;i+=7) if(Math.abs(c0[i]-W.raw[i-W.rawAt])>1e-6) throw new Error("not the same take");
+  const a=Math.floor((P.safe/SR-PRE_WARM_MONO)*R/g)*g, k0=a*SR/R, wm=Math.round(PRE_WARM_MONO*SR), k=k0+wm;
+  const sub=new AudioBuffer({length:buf.length-a,sampleRate:R,numberOfChannels:buf.numberOfChannels});
+  for(let c=0;c<buf.numberOfChannels;c++) sub.copyToChannel(buf.getChannelData(c).subarray(a),c);
+  const y=await toMono(sub);
+  if(k>x0.length||y.length<=wm) return null;
+  for(let i=k0+Math.round(0.05*SR);i<k;i+=3) if(Math.abs(x0[i]-y[i-k0])>1e-3) throw new Error("not the same signal");
+  const x=new Float32Array(k0+y.length);
+  x.set(x0.subarray(0,k)); x.set(y.subarray(wm),k);
+  return x;
 }
 // one round of work: as much as fits before until; false once it has caught up
 async function preWork(P,until,o){
@@ -24132,10 +24339,15 @@ window.preFinish=async(L,buf)=>{
   try{
     P.hold=true;
     while(P.busy||P.reading) await preSleep(20);
-    const x=await toMono(buf);
+    // the rest of it put on to what was read while recording (preTail), else the whole made again
+    let x=null;
+    try{ x=await preRest(P,buf); }catch(err){ x=null; }
+    if(!x){
+      x=await toMono(buf);
+      // the take as read so far must be the start of this one
+      if(P.x){ for(let i=0;i<P.safe;i+=4999) if(P.x[i]!==x[i]) throw new Error("not the same take"); }
+    }
     MONO_LAST={buf,x};
-    // the take as read so far must be the start of this one
-    if(P.x){ for(let i=0;i<P.safe;i+=4999) if(P.x[i]!==x[i]) throw new Error("not the same take"); }
     P.x=x; P.safe=x.length; P.fin=true;
     { const o={block:PRE_BLOCK,yieldFn:()=>new Promise(r=>setTimeout(r,0))}, t0=performance.now();
       while(await preWork(P,Infinity,o)&&!P.done&&performance.now()-t0<60000) await preSleep(5); }
