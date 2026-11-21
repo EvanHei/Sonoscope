@@ -3113,7 +3113,11 @@ const BP_QUICK=0.45;        // s: a note shorter than this the model may add on 
 const BP_SLIDE=0.12;        // s: a passing note shorter than this, and much shorter than its neighbours, is a slide
 const BP_QMIN=0.09;         // s: but no shorter than this - a slide between two notes, heard by the model alone, breaks a passage of octaves
 const BP_REACH=33;          // semitones over the top string the model's notes may reach
-const BP_PARTIALS=[12,19,24,28,31,36];   // a note this far over a louder one may be its partial
+// a note this far over a louder one may be its partial: the 2nd to the 8th. The 7th (34, a little flat of it) was missing:
+// a cello's low notes sound it strongly, and the model's short notes there cut a held note in two in a take of double
+// stops, where nothing puts the rest of it back (2026-11-21: Iowa cello Eb2 and Bb2 read as their 7th partials, C#5 and Ab5)
+const BP_PARTIALS=[12,19,24,28,31,34,36];
+const BP_RESUME=0.25;       // s: a gap in the line this long that a held note of the model's still covers is that note again (double stops)
 function bpLine(ev){
   const L=ev.slice().sort((a,b)=>a.t0-b.t0||b.amp-a.amp), one=[];
   for(let i=0;i<L.length;i++){
@@ -3122,6 +3126,19 @@ function bpLine(ev){
     if(one.length&&Math.abs(one[one.length-1].t0-n.t0)<BP_TOG) continue;
     const nx=L.slice(i+1).find(o=>o.t0>n.t0+BP_TOG), end= nx? Math.min(n.t1,nx.t0) : n.t1;
     if(end-n.t0>=BP_MIN) one.push({t0:n.t0,t1:end,midi:n.midi,amp:n.amp});
+  }
+  // In a take of double stops a held note comes back where a shorter one over it has ended: the model holds it on,
+  // but each note ends the one before, and the line was left empty until the next note began - an open string ringing
+  // at the start of a held B4 took the rest of it (2.2 s). Outside double stops the learned line and sfFill see to it.
+  if(dsAna()){
+    const add=[];
+    for(let i=0;i<one.length;i++){
+      const a=one[i], b=one[i+1], gEnd= b? b.t0 : Infinity;
+      if(gEnd-a.t1<BP_RESUME) continue;
+      const r=L.filter(n=>n.t0<a.t1&&n.t1>=a.t1+BP_RESUME).sort((p,q)=>q.amp-p.amp)[0];
+      if(r) add.push({t0:a.t1,t1:Math.min(r.t1,gEnd),midi:r.midi,amp:r.amp});
+    }
+    if(add.length){ one.push(...add); one.sort((p,q)=>p.t0-q.t0); }
   }
   const out=[];
   for(const n of one){
@@ -4340,8 +4357,12 @@ function octBelow(nt){
   nt.second={f:S.aref*Math.pow(2,(o-69)/12),midi:o,name:noteName(o),cents:0};
 }
 /* A low note whose even partials sit on its odd ones' curve is one string,
-   however much they lift (see octPassage). */
-function octFlat(nt){ return nt.target<=OCT_LOW&&nt.octOff<OCT_FLAT; }
+   however much they lift (see octPassage). Higher up the same holds closer in (OCT_FLAT_HI), short of a lift no
+   single note gives (OCT_SURE): two strings are never 2:1 at every partial - their tuning, their stiffness - and a
+   single note's even partials lie on its odd ones' curve. (2026-11-21: single notes E4 to B5 read as octaves on the
+   bench, cello, violin and viola, all at 0.00-0.42 cents; the octaves found the same way 0.43-3.4, two at 0.1.) */
+const OCT_FLAT_HI=0.4, OCT_SURE=2.5;
+function octFlat(nt){ return nt.target<=OCT_LOW? nt.octOff<OCT_FLAT : nt.octOff<OCT_FLAT_HI&&!(nt.octR>=OCT_SURE); }
 /* A note read as the octave above its own: the partner at the peak found
    at twice its pitch, which the two notes share, so the cents lean toward
    the lower note's - right in direction, shy in size. */
@@ -5321,6 +5342,34 @@ function dsFromMag(mag,binHz,half,mx,f1,aref,live,cx){
    kept decaying back under the mark; once it has some, it is confirmed at TEN_KNOWN of the bar. A first sighting
    still has to clear the whole of it. (2026-11-20: tenths in E-flat major from a player's own notes, Eb4/G5 up.) */
 const TEN_KNOWN=0.6, TEN_BACK=3, TEN_PASS=1.5, TEN_VOTE=2, SUB_TOL=35;   // SUB_TOL: cents (liveSecond, a held pair's bass)
+/* A passage in one interval (liveSecond): a pair of the same kind as one held under PASS_WIN s ago. The kinds are
+   the intervals as a scale in them plays them - thirds major and minor alike, sixths alike, tenths alike; a fourth,
+   a fifth. Not seconds, which a ringing note makes, nor octaves, which have their own (octPassage). */
+const PASS_WIN=1;
+/* How far the 4th, 6th and 8th partials of f stand over the odd ones either side, off a frame's peaks (partnerOf): about
+   1 for one string, 2 and more with a louder voice an octave up. Its fundamental is left out, which on a low string
+   can all but vanish and make any second partial look lifted. NaN with too few partials to tell. */
+function evenOver(pk,f,binHz){
+  const h=k=>{ const q=nearPeak(pk,k*f,hTol(k,f,binHz)); return q? q.a : 0; };
+  const r=[];
+  for(const k of [4,6,8]){ const env=Math.sqrt(h(k-1)*h(k+1)); if(env>0&&h(k)>0) r.push(h(k)/env); }
+  if(r.length<2) return NaN;
+  r.sort((a,b)=>a-b);
+  return r[Math.ceil(r.length/2)-1];
+}
+function ivClass(st){ return st===3||st===4? 3 : st===8||st===9? 6 : st===15||st===16? 10 : st===5? 4 : st===7? 5 : null; }
+/* And a pair of a passage is two new notes: neither held in the pair before, and the one not tracked not itself the
+   note tracked a moment ago (PASS_FRESH s). A broken chord with its strings left ringing makes pairs of one interval
+   too - the note played over the one just played - and on Bach's suites (MusicNet) the passage rule without this
+   showed them as double stops over single notes half as often again. */
+const PASS_FRESH=1.5;
+const EV_KEEP=true;    // a new note keeps the evidence for pairs holding it (liveFrame)
+function inPass(lo,hi){
+  if(!(INSTR.manyPart&&LV.passIv!=null&&LV.fr-LV.passFr<PASS_WIN*LV_HZ&&ivClass(hi-lo)===LV.passIv)) return false;
+  const P=LV.passPair, m1=LV.m1h[LV.m1h.length-1], other= m1===lo? hi : lo;
+  if(P&&(P.lo===lo||P.lo===hi||P.hi===lo||P.hi===hi)) return false;
+  return !LV.m1h.slice(-Math.round(PASS_FRESH*LV_HZ)).includes(other);
+}
 function partnerOf(pk,f1,binHz,half,mx,aref,live,cx){
   const own=p=>{ const k=Math.round(p.f/f1); return k>=1&&k<=30&&Math.abs(p.f-k*f1)<hTol(k,f1,binHz); };
   const m1=Math.round(69+12*Math.log2(f1/aref));
@@ -5360,7 +5409,10 @@ function partnerOf(pk,f1,binHz,half,mx,aref,live,cx){
     const f=f1*Math.pow(2,st/12);
     if(f<F_MIN||f>F_MAX) continue;
     const r=score(f);
-    if(!best||r.s>best.s) best={...r,f,st};
+    // Only a candidate with two partials of its own can be taken (below), so on the many-partial strings only those
+    // compete: one stray peak, scored highest on its single partial, turned away the real partner with three or four
+    // - a cello's low tenths and sixths heard from their upper note (D2 under F#3 scored 0.44 of it, its bar 0.12).
+    if((r.n>=2||!INSTR.manyPart)&&(!best||r.s>best.s)) best={...r,f,st};
     if((st===15||st===16)&&(!ten||r.s>ten.s)) ten={...r,f,st};
   }
   if(cx&&cx.rang&&best&&Math.abs(best.st)<=2&&cx.rang.includes(m1+best.st)&&ten&&ten.n>=2) best=ten;
@@ -5402,13 +5454,31 @@ function partnerOf(pk,f1,binHz,half,mx,aref,live,cx){
     // D4 bowed beside a Bb3 - still shows its odd partials, three or more of
     // them, and several more partials than the octave above can account for;
     // that is the lower note sounding, not the upper one borrowed down.
-    const lean= INSTR.manyPart&&div===2&&odd>=3&&r.n>=best.n+3&&r.s>best.s*0.55;
+    // So does the lower voice of a fifth heard from its upper note, G2 under D3: three of its odd partials clear of
+    // the D3's (G2, B4, F5), seven partials to the G3's six - but its weak fundamental keeps its sum at 0.6-0.7 of
+    // the G3's, and the live view showed a fourth above (2026-11-21: cello fifths on the bench, the upper voice the
+    // louder; five of five taken an octave high). Three odd partials of its own and no fewer in all is the lower note;
+    // so are two, with three partials more than the octave above.
+    const lean= INSTR.manyPart&&div===2&&(odd>=3&&r.n>=best.n||odd>=2&&r.n>=best.n+3)&&r.s>best.s*0.55;
     // A tenth taken down to a third is held to more: the third's lower note
     // has its fundamental, or its odd partials. A tenth's upper note borrowed
     // an octave down has neither - only stray peaks from a ringing string.
     const real=( !INSTR.manyPart||div%2!==0||lean||(odd>=2||r.n>best.n)&&(c<F_MIN*2.5||fa(c)>=0.1*fa(best.f)) )
       &&(!INSTR.manyPart||div!==2||Math.abs(best.st)<15||lean||fa(c)>=0.1*fa(best.f));
-    if(r.n>=2&&(r.s>best.s*0.72||ten||more||lean)&&real){ best={...r,f:c,st}; break; }
+    // A twelfth down the same way: a "partner" a fifth over the tracked note that is the third partial of a voice an
+    // octave under it - C#2 under a louder C#3, its G#3 taken for the second voice. The C#2 has partials of its own
+    // the G#3 has nothing at (its first, fifth, seventh: C#2, F4, B4), two or more of them, and more partials in all.
+    // An octave under the tracked note has to stand out as a second voice besides: the tracked note's partials (its
+    // even ones) well over its odd ones, as a single low note read an octave high never has them (sub3: 2026-11-21,
+    // cello octaves on the bench, the upper voice the louder).
+    let ext=0;
+    if(INSTR.manyPart&&div===3) for(const k of [1,2,4,5,7,8]){
+      if(k*c>=half*binHz) break;
+      const q=nearPeak(free,k*c,hTol(k,c,binHz));
+      if(q&&q.a>mx*PK_HEARD) ext++;
+    }
+    const sub3= INSTR.manyPart&&div===3&&ext>=2&&r.n>best.n&&r.s>best.s*0.45&&(st%12!==0||evenOver(pk,c,binHz)>=OCT_NOTE);
+    if(r.n>=2&&(r.s>best.s*0.72||ten||more||lean||sub3)&&real){ best={...r,f:c,st}; break; }
   }
   // A fifth keeps the fewest partials of its own: every other one of the upper
   // voice's lands on the lower's, and every third of the lower's on the
@@ -7332,8 +7402,12 @@ function liveSecond(f1,aref,on){
   // In a passage of tenths (one held a moment ago, TEN_PASS) the next tenth is expected: its votes count TEN_VOTE, so
   // it is taken up on two frames that agree rather than three or more. Not the one held (its evidence is not let run up).
   const tenPass= LV.fr-(LV.tenFr??-1e9)<TEN_PASS*LV_HZ;
+  // The same in a passage of any one interval (thirds, fourths, fifths, sixths: inPass): the next pair of the kind
+  // just held is expected, and counts double. A note ringing on from the pairs before makes a second or a fourth with
+  // the next one of the scale, never the passage's own interval. (2026-11-21: cello scales in thirds on the bench, each
+  // pair shown 140-340 ms in - after half of a quick note - waiting out a ring that could not be there.)
   const vote=(lo,hi)=>{ const k=lo+"/"+hi, held0= LV.pv&&LV.pv.lo===lo&&LV.pv.hi===hi;
-    LV.ev[k]=(LV.ev[k]||0)+(tenPass&&!held0&&(hi-lo===15||hi-lo===16)? TEN_VOTE : 1); };
+    LV.ev[k]=(LV.ev[k]||0)+(!held0&&(tenPass&&(hi-lo===15||hi-lo===16)||inPass(lo,hi))? TEN_VOTE : 1); };
   // partners with some evidence already, for the tenths' lower bar (partnerOf)
   const known=[]; for(const k in LV.ev) if(LV.ev[k]>=DS_TENT||LV.pv&&k===LV.pv.lo+"/"+LV.pv.hi){ const [a,b]=k.split("/").map(Number); if(a===m1) known.push(b); else if(b===m1) known.push(a); }
   if(LV.pv){ if(LV.pv.lo===m1) known.push(LV.pv.hi); else if(LV.pv.hi===m1) known.push(LV.pv.lo); }
@@ -7467,7 +7541,9 @@ function liveSecond(f1,aref,on){
                  // and a tenth, whose ringing note would be nine steps of a scale back, not two: none in TEN_BACK s -
                  // found above the note tracked, not under it (the hard case, partnerOf), where a fast single-note
                  // scale made one (2026-11-20: tenths in E-flat major from a player's own notes; single-note scales no more pairs)
-                 ||INSTR.manyPart&&(P.hi-P.lo===15||P.hi-P.lo===16)&&m1===P.lo&&LV.quickFade===null&&!LV.hist.some(h=>h.v&&h.t>LV.tNow-TEN_BACK&&Math.round(h.m)===other);
+                 ||INSTR.manyPart&&(P.hi-P.lo===15||P.hi-P.lo===16)&&m1===P.lo&&LV.quickFade===null&&!LV.hist.some(h=>h.v&&h.t>LV.tNow-TEN_BACK&&Math.round(h.m)===other)
+                 // and the next pair of a passage in one interval (inPass), unless it is already seen to be fading
+                 ||inPass(P.lo,P.hi)&&LV.quickFade!==true;
     const tailOk= !left||LV.fadeKnown||LV.midFade===false||LV.octLine===bk;
     // Nor a second whose other note was itself played a moment ago: that is
     // the note before still ringing under a step of the melody. On twenty
@@ -7483,6 +7559,7 @@ function liveSecond(f1,aref,on){
   }
   if(LV.pv){
     if(LV.pv.hi-LV.pv.lo===15||LV.pv.hi-LV.pv.lo===16) LV.tenFr=LV.fr;   // a passage of tenths (partnerOf, cx.rang)
+    LV.passIv=ivClass(LV.pv.hi-LV.pv.lo); LV.passFr=LV.fr; LV.passPair=LV.pv;   // and of any interval (inPass)
     const rd= LV.pv===Q? rq : readPair(LV.pv);
     LV.vr={lo: rd.lo? rd.lo.cents : NaN, hi: rd.hi? rd.hi.cents : NaN};
     LV.vp={lo: rd.lo? rd.lo.p : 0, hi: rd.hi? rd.hi.p : 0};
@@ -8110,7 +8187,18 @@ function liveFrame(){
     // double stop, not a new note
     else if(LV.pv&&(n===LV.pv.lo||n===LV.pv.hi)&&(LV.note===LV.pv.lo||LV.note===LV.pv.hi)) LV.pend=0;
     else if(Math.abs(midi-LV.note)>0.72){
-      if(++LV.pend>=3){ LV.prevNote=LV.note; LV.prevFr=LV.fr; LV.note=n; LV.count++; LV.pend=0; LV.cents=[]; dropSecond(); }
+      if(++LV.pend>=3){
+        LV.prevNote=LV.note; LV.prevFr=LV.fr; LV.note=n; LV.count++; LV.pend=0; LV.cents=[];
+        // The evidence for a pair holding the new note was gathered over these frames, with the new note sounding:
+        // it is kept, so the pair is not built up again from nothing a few frames after it began. Not for a pair
+        // whose other note was itself tracked lately (PASS_FRESH): that is the note just played, still ringing - on
+        // Bach's suites, kept, it put a pair over single notes a fifth more often.
+        const recent=LV.m1h.slice(-Math.round(PASS_FRESH*LV_HZ));
+        const keep= INSTR.manyPart&&EV_KEEP? Object.entries(LV.ev).filter(([k])=>{ const [a,b]=k.split("/").map(Number);
+          return (a===n||b===n)&&!recent.includes(a===n? b : a); }) : [];
+        dropSecond();
+        for(const [k,v] of keep) LV.ev[k]=v;
+      }
     }else LV.pend=0;
     LV.cents.push((midi-LV.note)*100);
     if(LV.cents.length>Math.round(1.4*LV_HZ)) LV.cents.shift();
