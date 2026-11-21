@@ -168,6 +168,10 @@ body.pza #vResults .bar-r .rbtns{display:flex;flex-direction:row;gap:10px}
 #lvStaffSvg.pz .sn{cursor:pointer}
 @keyframes lvIn{from{opacity:0}to{opacity:1}}
 #lvStaffSvg .lvnew{animation:lvIn .52s ease-out both}
+/* a note as the live view hears it, before the take's analysis has settled it (lvProv): written at once, a little faint */
+@keyframes lvInP{from{opacity:0}to{opacity:.6}}
+#lvStaffSvg .lvprov{opacity:.6}
+#lvStaffSvg .lvprov.lvnew{animation:lvInP .12s ease-out both}
 #vMain.lay2 .lvfollow{display:block;position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:4;width:40px;height:40px;
   padding:0;border:0;background:transparent;color:var(--amber);cursor:pointer;animation:fadein .2s ease}
 #vMain.lay2 .lvfollow[hidden]{display:none}
@@ -7064,7 +7068,8 @@ async function startLive(seed){
 function liveLoop(){
   if(!LV||LV.paused) return;
   drawLive();
-  if(!LV.lscT||performance.now()-LV.lscT>120){ LV.lscT=performance.now(); lscDraw(); }
+  // the staff looked at every 50 ms (it draws only when its notes have changed): a note heard goes down without waiting
+  if(!LV.lscT||performance.now()-LV.lscT>LSC_EVERY){ LV.lscT=performance.now(); lscDraw(); }
   LV.raf=requestAnimationFrame(liveLoop);
 }
 
@@ -8338,7 +8343,7 @@ S.arefLive=()=>clamp(parseFloat($("aref").value)||440,330,500);
    through on a shift never do. A single note that grows into a pair it is
    part of becomes that pair. The newest note is lit and updates as it goes.
    ===================================================================== */
-const LSC_MIN=0.15, LSC_GAP=0.1, LSC_KEEP=60, LSC_LED=2;
+const LSC_MIN=0.15, LSC_GAP=0.1, LSC_KEEP=60, LSC_LED=2, LSC_EVERY=50;   // LSC_EVERY: ms between looks at the staff (liveLoop)
 const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
 function lscTrack(t,voiced,midi){
   const L=LV.lsc;
@@ -13289,9 +13294,13 @@ function lvStaffDraw(N){
     }
     if(added) LVS.bgRev++;
   }
-  N=lvDrawn().map((n,i)=>Object.assign(n,{i}));     // only settled notes: the background analysis's (lvBgNotes), or the live view's finished ones
-  const cur=N.length? N[N.length-1] : null;
-  const sig=[Wp,LVS.bgRev,(LV&&LV.pauses||[]).length,LV&&LV.paused?1:0,N.length,N.slice(-4).map(n=>n.key).join(","),cur? Math.round(cur.cents/2) : "",cur&&cur.second? Math.round(cur.second.cents/2) : ""].join("|");
+  // the settled notes - the background analysis's (lvBgNotes), or the live view's finished ones - and after them,
+  // faint, what the live view has heard since (lvProv), until the analysis settles that stretch too
+  const settled=lvDrawn(), prov=lvProv();
+  N=settled.concat(prov).map((n,i)=>Object.assign(n,{i}));
+  const cur=settled.length? settled[settled.length-1] : null;
+  const sig=[Wp,LVS.bgRev,(LV&&LV.pauses||[]).length,LV&&LV.paused?1:0,N.length,N.slice(-4).map(n=>n.key).join(","),cur? Math.round(cur.cents/2) : "",cur&&cur.second? Math.round(cur.second.cents/2) : "",prov.map(n=>n.key).join(","),
+    prov.length? Math.round(prov[prov.length-1].cents/2) : ""].join("|");
   if(LVS.sig===sig) return;
   LVS.sig=sig;
   let ev=[];
@@ -13301,7 +13310,7 @@ function lvStaffDraw(N){
     // every note keeps room for an accidental, so one gained or lost (the key guessed again) moves nothing
     if(e.accW<ST_ACC){ e.accW=ST_ACC; e.w=ST_NOTE+e.accW+e.shift; }
   });
-  lvSumPaint(N);
+  lvSumPaint(settled);
   LVS.kidx= ev.length? ev[ev.length-1].key : null;   // the key now, for the names in the column (liveName)
   const sc=0.88, W=Wp/sc;    // a little under the size the Analyze staff is drawn at
   // each line keeps room for the widest clef and a signature of two, so a clef or key guessed again moves no notes
@@ -13345,7 +13354,7 @@ function lvStaffDraw(N){
       let g=noteSVG(e,0,bot0,0,top0-30,bot0+ST_G*5,0);
       const T=[]; g=g.replace(/<text class="stc[^>]*>[^<]*<\/text>/g,m=>{ T.push(m); return ""; });
       g=g.replace(/<\/g>$/,'<g class="lvcy">'+T.join("")+'</g></g>');
-      want.set("n"+e.n.key,{h:g,x:it.x,y:dy,cy});
+      want.set("n"+e.n.key,{h:g,x:it.x,y:dy,cy,prov:!!e.n.prov});
     });
   });
   /* only what changed. A note or a line not there before fades in - a batch's notes one after another, left to
@@ -13362,13 +13371,17 @@ function lvStaffDraw(N){
   for(const [k,p] of want){
     const old=LVS.el.get(k);
     if(old&&LVS.html.get(k)===p.h){ place(old,p); continue; }
+    // a note still being heard changes as it goes (its cents): drawn again where it is, not faded across
+    if(old&&p.prov){ old.innerHTML=p.h; place(old,p); LVS.html.set(k,p.h); continue; }
     const t=document.createElementNS("http://www.w3.org/2000/svg","svg");
     t.innerHTML='<g data-lk="'+k+'">'+p.h+'</g>';
     const g=t.firstChild;
+    if(p.prov) g.classList.add("lvprov");
     place(g,p);
     if(old){ place(old,p); if(!quiet) fade(g,now); old.after(g); gone(old); }
     else{
-      if(!quiet) fade(g, k[0]==="n"? now+Math.min(j++*LVS_FADE_STEP,LVS_FADE_MAX) : now);
+      // a heard note comes in at once; settled ones one after another, left to right
+      if(!quiet) fade(g, p.prov? now : k[0]==="n"? now+Math.min(j++*LVS_FADE_STEP,LVS_FADE_MAX) : now);
       if(k[0]==="L") svg.insertBefore(g,svg.firstChild); else svg.appendChild(g);
     }
     LVS.el.set(k,g); LVS.html.set(k,p.h);
@@ -14090,6 +14103,24 @@ function lvDrawn(){
   const k=N.length+"|"+(N[0].key||"")+"|"+(N[N.length-1].key||"")+"|"+LVS.bgRev+"|"+(LVS.fix? LVS.fixN : -1);
   if(LPO.k===k&&LPO.out) return LPO.out;
   LPO.k=k; LPO.out=leapOut(N); return LPO.out;
+}
+/* What the live view has heard since the last settled note: its held notes and pairs (LV.lsc), the one being played
+   among them once it has lasted LSC_MIN, written faint after the settled ones at once - the background analysis
+   settles a note a second and a half to three later (it reads the take back every PRE_EVERY_LIVE s, and leaves its
+   last LVBG_SETTLE s unsettled), and a double stop's notes went down only once over. Each gives way to the settled
+   notes as they come for its stretch. */
+function lvProv(){
+  if(!LV||!LV.lsc) return [];
+  const from=(LVS.bgEnd||0)-0.02, L=LV.lsc, sp=LV.speech, out=[];
+  const add=n=>{
+    if(n.t0<from||n.lvsTaken) return;
+    const p={target:n.target,cents:n.cents,t0:n.t0,t1:n.t1,second:n.second? {midi:n.second.midi,cents:n.second.cents} : null,key:"p"+n.key+"@"+n.t0.toFixed(2),prov:true};
+    if((sp&&sp.length)&&vcSaid(p,sp)) return;   // spoken to Sonoscope: not notes
+    out.push(p);
+  };
+  for(const n of L.done) add(n);
+  if(L.cur&&L.cur.t1-L.cur.t0>=LSC_MIN) add(L.cur);
+  return out;
 }
 function lvDrawn0(){
   const N= LVS.fix? LVS.fix.concat(LVS.bg.slice(LVS.fixN)) : LVS.bg, sp=LV&&LV.speech;
