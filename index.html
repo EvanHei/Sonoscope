@@ -7407,6 +7407,26 @@ function liveReinstr(){
     "vhi","vlo","pair","ease"]) LV[k]=F[k];
   LV.prevNote=null;
 }
+/* In a quick passage the pair is read over the last half of the window only. The whole window (186 ms for the cello)
+   is most of a note at 240 a minute, so for half of each note it read the pair before as much as the one played: at
+   240, nine pairs in ten of a scale in thirds, sixths or tenths were shown for less than half their length, coming
+   170 ms in. Over half the window they come 125 ms in, and over half of them are shown for most of it. A held note keeps
+   the whole window, which tells close partials apart better: always read over half, held pairs were shown less often.
+   "Quick" is a note that follows one shorter than LV_QUICK_DUR, for its first LV_QUICK_FOR s. (2026-11-22: cello
+   scales in thirds, sixths, octaves and tenths at 200-280 a minute on the bench; the standard set's passages shown 34 ms
+   sooner and its held pairs as before; violin and viola the same or quicker; on Bach's suites fewer pairs over single
+   notes, 9.7 -> 8.0% of their frames.) */
+const LV_SHORT=0.5, LV_QUICK_DUR=0.6, LV_QUICK_FOR=0.6;
+function lvQuick(){
+  return INSTR.manyPart&&LV.prevDur!=null&&LV.prevDur<LV_QUICK_DUR&&LV.noteT0!=null&&LV.tNow-LV.noteT0<LV_QUICK_FOR;
+}
+function lvWin(N){
+  const n=Math.round(N*LV_SHORT);
+  if(!lvQuick()) return LV.dsHann;
+  // the last n samples, Hann, scaled to the whole window's gain so a voice's level carries across the switch
+  if(!LV.dsHannS||LV.dsHannS.length!==N){ const w=new Float64Array(N); for(let k=0;k<n;k++) w[N-n+k]=(0.5-0.5*Math.cos(2*Math.PI*k/n))*N/n; LV.dsHannS=w; }
+  return LV.dsHannS;
+}
 /* One frame's spectrum into LV.dsMag, and how loud the ear hears the frame
    against its plain level (LV.awc). The pair search reads the spectrum; the
    dynamic reads awc, for the room's quiet before a take as well as for notes. */
@@ -7415,7 +7435,7 @@ function liveSpec(){
   // Stop at the band the offline search covers. Past it there is only hiss,
   // and hiss peaks would read as energy the fundamental cannot explain.
   const half=Math.min(N/2,Math.round(11025/binHz));
-  const re=LV.dsRe, im=LV.dsIm, mag=LV.dsMag, b=LV.buf, w=LV.dsHann;
+  const re=LV.dsRe, im=LV.dsIm, mag=LV.dsMag, b=LV.buf, w=lvWin(N);
   for(let k=0;k<N;k++) re[k]=b[k]*w[k];
   LV.dsFft.realForward(re,im);
   let mx=0;
@@ -7475,8 +7495,9 @@ function liveSecond(f1,aref,on){
   // just held is expected, and counts double. A note ringing on from the pairs before makes a second or a fourth with
   // the next one of the scale, never the passage's own interval. (2026-11-21: cello scales in thirds on the bench, each
   // pair shown 140-340 ms in - after half of a quick note - waiting out a ring that could not be there.)
-  const vote=(lo,hi)=>{ const k=lo+"/"+hi, held0= LV.pv&&LV.pv.lo===lo&&LV.pv.hi===hi;
-    LV.ev[k]=(LV.ev[k]||0)+(!held0&&(tenPass&&(hi-lo===15||hi-lo===16)||inPass(lo,hi))? TEN_VOTE : 1); };
+  // w: a vote's own weight, from a caller that knows the pair is expected (octPassage)
+  const vote=(lo,hi,w)=>{ const k=lo+"/"+hi, held0= LV.pv&&LV.pv.lo===lo&&LV.pv.hi===hi;
+    LV.ev[k]=(LV.ev[k]||0)+(!held0&&(w||tenPass&&(hi-lo===15||hi-lo===16)||inPass(lo,hi))? w||TEN_VOTE : 1); };
   // partners with some evidence already, for the tenths' lower bar (partnerOf)
   const known=[]; for(const k in LV.ev) if(LV.ev[k]>=DS_TENT||LV.pv&&k===LV.pv.lo+"/"+LV.pv.hi){ const [a,b]=k.split("/").map(Number); if(a===m1) known.push(b); else if(b===m1) known.push(a); }
   if(LV.pv){ if(LV.pv.lo===m1) known.push(LV.pv.hi); else if(LV.pv.hi===m1) known.push(LV.pv.lo); }
@@ -7781,6 +7802,9 @@ function noteVib(m,c){
   const v=V.s.slice().sort((p,q)=>p-q);
   return v[(v.length-1)>>1];
 }
+/* The next octave of a passage of them, which the one before vouches for, counts double, as the next pair of a
+   passage in thirds or sixths does (inPass). (2026-11-22: octave scales at 240 a minute, taken up a frame sooner.) */
+const OCT_PASS_VOTE=2;
 function octPassage(mag,binHz,half,mx,f1,m1,m2,wobbled,vote){
   if(!INSTR.manyPart) return;
   if(LV.octRK!==m1){ LV.octRK=m1; LV.octR=[]; LV.octB=[]; LV.octO=[]; LV.octA=[]; LV.octN=0; LV.octOk=false; LV.octW=0; }
@@ -7843,7 +7867,7 @@ function octPassage(mag,binHz,half,mx,f1,m1,m2,wobbled,vote){
   const C=LV.octCtx;
   if(!C||LV.fr-C.fr>OCT_CTX*LV_HZ) return;
   // read off the top note, with the bottom one sounding under it
-  if(Math.abs(m1-12-C.lo)<=OCT_STEP&&playable(m1-12,m1)&&oddBelow(mag,binHz,half,mx,f1)){ C.lo=m1-12; vote(m1-12,m1); return; }
+  if(Math.abs(m1-12-C.lo)<=OCT_STEP&&playable(m1-12,m1)&&oddBelow(mag,binHz,half,mx,f1)){ C.lo=m1-12; vote(m1-12,m1,OCT_PASS_VOTE); return; }
   if(Math.abs(m1-C.lo)>OCT_STEP||!playable(m1,m1+12)) return;
   C.lo=m1;
   // some lift, or less of it with the even partials plainly off the odd
@@ -7865,7 +7889,7 @@ function octPassage(mag,binHz,half,mx,f1,m1,m2,wobbled,vote){
     const h=LV.octH.slice().sort((a,b)=>a-b);
     if(run<OCT_GONE*h[(h.length-1)>>1]) return;
   }
-  vote(m1,m1+12);
+  vote(m1,m1+12,OCT_PASS_VOTE);
   LV.octLine=m1+"/"+(m1+12);
 }
 /* Is there a note an octave under f1? Its odd partials fall half way between
@@ -8252,13 +8276,14 @@ function liveFrame(){
   // note tracking with the same hysteresis idea as the offline segmenter
   if(voiced){
     const n=Math.round(midi);
-    if(LV.note===null){ LV.note=n; LV.count++; LV.cents=[]; }
+    if(LV.note===null){ LV.note=n; LV.count++; LV.cents=[]; LV.noteT0=t; }
     // the pitch track moving between the two notes of a held pair is the same
     // double stop, not a new note
     else if(LV.pv&&(n===LV.pv.lo||n===LV.pv.hi)&&(LV.note===LV.pv.lo||LV.note===LV.pv.hi)) LV.pend=0;
     else if(Math.abs(midi-LV.note)>0.72){
       if(++LV.pend>=3){
         LV.prevNote=LV.note; LV.prevFr=LV.fr; LV.note=n; LV.count++; LV.pend=0; LV.cents=[];
+        LV.prevDur= LV.noteT0!=null? t-LV.noteT0 : null; LV.noteT0=t;
         // The evidence for a pair holding the new note was gathered over these frames, with the new note sounding:
         // it is kept, so the pair is not built up again from nothing a few frames after it began. Not for a pair
         // whose other note is the note just played (justPlayed), still ringing - on Bach's suites, kept, it put a
@@ -8272,7 +8297,7 @@ function liveFrame(){
     LV.cents.push((midi-LV.note)*100);
     if(LV.cents.length>Math.round(1.4*LV_HZ)) LV.cents.shift();
   }else{
-    if(++LV.pend>=6){ if(LV.note!==null){ LV.prevNote=LV.note; LV.prevFr=LV.fr; } LV.note=null; LV.cents=[]; }
+    if(++LV.pend>=6){ if(LV.note!==null){ LV.prevNote=LV.note; LV.prevFr=LV.fr; LV.prevDur= LV.noteT0!=null? t-LV.noteT0 : null; } LV.note=null; LV.cents=[]; }
   }
 
   lscTrack(t,voiced,midi);
