@@ -7633,6 +7633,12 @@ function liveSecond(f1,aref,on){
                  // found above the note tracked, not under it (the hard case, partnerOf), where a fast single-note
                  // scale made one (2026-11-20: tenths in E-flat major from a player's own notes; single-note scales no more pairs)
                  ||INSTR.manyPart&&(P.hi-P.lo===15||P.hi-P.lo===16)&&m1===P.lo&&LV.quickFade===null&&!LV.hist.some(h=>h.v&&h.t>LV.tNow-TEN_BACK&&Math.round(h.m)===other)
+                 // and an octave the same way, found under the note tracked: a low note's own second partial can pass
+                 // for an octave over it, but nothing in the note tracked makes one under it. Not an open string, which
+                 // rings in sympathy an octave from what is played. (2026-11-22: octaves at 240 a minute with the top
+                 // note louder, the pitch track on it - the pair's evidence ran to twice the bar and it was never shown,
+                 // waiting out the read.)
+                 ||INSTR.manyPart&&P.hi-P.lo===12&&m1===P.hi&&LV.quickFade===null&&!LV.m1h.includes(other)&&!INSTR.open.includes(other)
                  // and the next pair of a passage in one interval (inPass), unless it is already seen to be fading
                  ||inPass(P.lo,P.hi)&&LV.quickFade!==true;
     const tailOk= !left||LV.fadeKnown||LV.midFade===false||LV.octLine===bk;
@@ -7825,6 +7831,8 @@ function octPassage(mag,binHz,half,mx,f1,m1,m2,wobbled,vote){
   const off= ov.length>=8? Math.abs(ov[(ov.length-1)>>1]) : NaN;
   const v=LV.octR.filter(isFinite).sort((a,b)=>a-b);
   const run= v.length>=3? v[(v.length-1)>>1] : NaN;
+  // beside the octave before, two frames are enough to go on: a third came after half a quick note had gone
+  const runC= v.length===2? (v[0]+v[1])/2 : run;
   const shows= m2===m1+12||wobbled||run>INSTR.octRatio||run>=OCT_SOFT&&octBeat(LV.octB,OCT_N*0.6)>=OCT_BEAT||off>=OCT_OFF;
   // Taken over the whole note so far, a note whose even partials sit on the
   // odd ones' curve is one string, however much they lift: on a player's
@@ -7864,6 +7872,9 @@ function octPassage(mag,binHz,half,mx,f1,m1,m2,wobbled,vote){
   if(m2===m1+12||m2===m1-12) return;
   // a lift that reads as an octave by itself, held over the run
   if(m2!==null&&run>INSTR.octRatio&&playable(m1,m1+12)){ vote(m1,m1+12); return; }
+  // a pair of another interval taken up since ends the passage: octaves then sixths, the sixths' low notes were read
+  // as the next octaves (2026-11-22)
+  if(P&&!oct) LV.octCtx=null;
   const C=LV.octCtx;
   if(!C||LV.fr-C.fr>OCT_CTX*LV_HZ) return;
   // read off the top note, with the bottom one sounding under it
@@ -7872,7 +7883,7 @@ function octPassage(mag,binHz,half,mx,f1,m1,m2,wobbled,vote){
   C.lo=m1;
   // some lift, or less of it with the even partials plainly off the odd
   // ones' curve - more than a note played alone, which lifts nothing
-  if(!(run>=OCT_SOFT||off>=OCT_OFF&&run>=OCT_OFF_LIFT)) return;
+  if(!(runC>=OCT_SOFT||off>=OCT_OFF&&runC>=OCT_OFF_LIFT)) return;
   // One carried over that never shows itself is not held up for long, nor
   // taken up again by the passage until an octave that shows itself renews it.
   if(oct&&m1===P.lo&&!LV.octSeen&&LV.fr-LV.octFr0>OCT_PROVE*LV_HZ) LV.octNo=P.lo+"/"+P.hi;
