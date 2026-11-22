@@ -4117,7 +4117,23 @@ function keySnap(N){
   });
   return k;
 }
-function measureNotes(notes,midi,frames,x,fft,re,im,hann){
+/* A quick note is read through a shorter window. The double-stop spectrum's window (NFFT_DS, 371 ms on the cello)
+   is longer than a note at a quick tempo (250 ms at 240 a minute), so every reading of one note also holds the notes
+   either side, still ringing or not yet begun - read as its partner, or as a false one. Under DS_SHORT seconds the
+   window is cut to DS_SHORT_N samples, centred, the rest of the transform zero: the same bins, broader peaks.
+   (2026-11-21: cello scales at 240 a minute on the bench, pairs read right 66 -> 79%; a scale's single notes read as
+   pairs 25 -> 9%.) Not for the octave test across a note, which is in cents and wants the full window. */
+var DS_SHORT=0.4, DS_SHORT_N=3072;
+const DS_HANN={};
+function dsHann(n){
+  const k=NFFT_DS+":"+n;
+  if(!DS_HANN[k]){ const h=new Float64Array(NFFT_DS), o=(NFFT_DS-n)>>1;
+    for(let i=0;i<n;i++) h[o+i]=0.5-0.5*Math.cos(2*Math.PI*i/n);
+    DS_HANN[k]=h; }
+  return DS_HANN[k];
+}
+const dsShortOf=(dur,hann)=> dur<DS_SHORT&&DS_SHORT_N<NFFT_DS? dsHann(DS_SHORT_N) : hann;
+function measureNotes(notes,midi,frames,x,fft,re,im,hann0){
   const dt=HOP/SR, fsP=SR/HOP;
   const dsOn=dsAna();
   const magN=new Float64Array(NFFT_DS/2), magO=new Float64Array(NFFT_DS/2);
@@ -4128,6 +4144,7 @@ function measureNotes(notes,midi,frames,x,fft,re,im,hann){
     nt.t0=frames[idx[0]].t;
     nt.t1=frames[idx[idx.length-1]].t+dt;
     nt.dur=nt.t1-nt.t0;
+    const hann=dsShortOf(nt.dur,hann0);
 
     // steady core: middle 70%
     const cut=Math.floor(idx.length*0.15);
@@ -4237,7 +4254,7 @@ function measureNotes(notes,midi,frames,x,fft,re,im,hann){
         for(let q=0;q<core.length;q+=step){
           const j=core[q];
           if(!(Math.abs(midi[j]-nt.target)<0.5)) continue;
-          const so=specAt(x,j*HOP+WIN/2,fft,re,im,hann,magO);
+          const so=specAt(x,j*HOP+WIN/2,fft,re,im,hann0,magO);
           H.push(octaveBands(so.mag,so.binHz,so.half,frames[j].f0));
           O.push(evenOffset(so.mag,so.binHz,so.half,so.mx,frames[j].f0));
         }
@@ -4251,8 +4268,8 @@ function measureNotes(notes,midi,frames,x,fft,re,im,hann){
       if(nt.second) trackPartner(nt,x,frames,fft,re,im,hann,S.aref);
     }
   });
-  if(dsOn&&INSTR.manyPart) octaveLine(notes,x,frames,fft,re,im,hann);
-  if(dsOn&&INSTR.manyPart&&S.takeLive) liveOctaves(notes,S.takeLive,x,frames,fft,re,im,hann);
+  if(dsOn&&INSTR.manyPart) octaveLine(notes,x,frames,fft,re,im,hann0);
+  if(dsOn&&INSTR.manyPart&&S.takeLive) liveOctaves(notes,S.takeLive,x,frames,fft,re,im,hann0);
   // each note's level as heard, for its dynamic marking (see DYN_ME)
   notes.forEach(nt=>{ nt.dbA=noteDbA(nt,x); noteEnds(nt,x); });
 }
@@ -4872,8 +4889,9 @@ function joinPairs(notes,midi,frames,x,fft,re,im,hann){
   };
   // Is note o sounding in the middle of nt, whose own note is t? Judged on o's
   // first few partials, leaving out any that land on t's, which would be t.
+  // a quick note is heard through the shorter window (dsShortOf): the long one hears its neighbour in it
   const sounding=(nt,o,t)=>{
-    const sp=specAt(x,nt.idx[nt.idx.length>>1]*HOP+WIN/2,fft,re,im,hann,magJ);
+    const sp=specAt(x,nt.idx[nt.idx.length>>1]*HOP+WIN/2,fft,re,im,dsShortOf(nt.idx.length*dt,hann),magJ);
     if(!(sp.mx>0)) return false;
     // the octave above shares every partial with the note under it, and
     // shows only by lifting its even ones
@@ -5390,16 +5408,30 @@ function evenOver(pk,f,binHz){
 }
 function ivClass(st){ return st===3||st===4? 3 : st===8||st===9? 6 : st===15||st===16? 10 : st===5? 4 : st===7? 5 : null; }
 /* And a pair of a passage is two new notes: neither held in the pair before, and the one not tracked not itself the
-   note tracked a moment ago (PASS_FRESH s). A broken chord with its strings left ringing makes pairs of one interval
-   too - the note played over the one just played - and on Bach's suites (MusicNet) the passage rule without this
-   showed them as double stops over single notes half as often again. */
-const PASS_FRESH=1.5;
+   note just played (justPlayed). A broken chord with its strings left ringing makes pairs of one interval too - the
+   note played over the one just played - and on Bach's suites (MusicNet) the passage rule without this showed them as
+   double stops over single notes half as often again.
+   "Just played" is the note just left, or one tracked in the last PASS_NOW s - not any tracked in the last PASS_FRESH s,
+   as it was: in a quick scale every note comes back two pairs on (thirds at 240 a minute: half a second), so that held
+   back every pair of it. And "the pair before" is the one heard just before, held or only faint (LV.seen0/seen1): a pair
+   left faint once put the passage back on the one held before it, two back, which in thirds shares a note with the next
+   - and from there on none was taken. (2026-11-21: cello scales at 240 a minute on the bench.) */
+const PASS_FRESH=1.5, PASS_NOW=0.2;
 const EV_KEEP=true;    // a new note keeps the evidence for pairs holding it (liveFrame)
+function justPlayed(o){
+  return o===LV.prevNote&&LV.fr-LV.prevFr<PASS_FRESH*LV_HZ||LV.m1h.slice(-Math.round(PASS_NOW*LV_HZ)).includes(o);
+}
+// a pair heard: held, or faint with the evidence to be taken up and both voices sounding
+function passSeen(Q){
+  const k=Q.lo+"/"+Q.hi;
+  if(LV.seenK!==k){ LV.seen0=LV.seen1||null; LV.seen1=Q; LV.seenK=k; }
+}
 function inPass(lo,hi){
   if(!(INSTR.manyPart&&LV.passIv!=null&&LV.fr-LV.passFr<PASS_WIN*LV_HZ&&ivClass(hi-lo)===LV.passIv)) return false;
-  const P=LV.passPair, m1=LV.m1h[LV.m1h.length-1], other= m1===lo? hi : lo;
+  const S1=LV.seen1, P= S1&&S1.lo===lo&&S1.hi===hi? LV.seen0 : S1||LV.passPair;
+  const m1=LV.m1h[LV.m1h.length-1], other= m1===lo? hi : lo;
   if(P&&(P.lo===lo||P.lo===hi||P.hi===lo||P.hi===hi)) return false;
-  return !LV.m1h.slice(-Math.round(PASS_FRESH*LV_HZ)).includes(other);
+  return !justPlayed(other);
 }
 /* The best candidate the last search turned away for being under its bar: {midi, r (its sum over the bar), n, st}.
    Analyze weighs it over a whole note (WEAK_*). */
@@ -7553,6 +7585,7 @@ function liveSecond(f1,aref,on){
   // read every frame, so its voices' levels have a history to judge by.
   const Q= LV.pv || (bk? pairOf(bk) : null);
   const rq= Q? readPair(Q) : null, fade= Q? fading(Q,rq) : false;
+  if(Q&&rq.both&&!fade&&(LV.pv||bs>=DS_ON)) passSeen(Q);
 
   // Take up the best-supported pair once it has the evidence and both of its
   // voices can be heard; a held pair only gives way to one clearly ahead of it.
@@ -8228,11 +8261,10 @@ function liveFrame(){
         LV.prevNote=LV.note; LV.prevFr=LV.fr; LV.note=n; LV.count++; LV.pend=0; LV.cents=[];
         // The evidence for a pair holding the new note was gathered over these frames, with the new note sounding:
         // it is kept, so the pair is not built up again from nothing a few frames after it began. Not for a pair
-        // whose other note was itself tracked lately (PASS_FRESH): that is the note just played, still ringing - on
-        // Bach's suites, kept, it put a pair over single notes a fifth more often.
-        const recent=LV.m1h.slice(-Math.round(PASS_FRESH*LV_HZ));
+        // whose other note is the note just played (justPlayed), still ringing - on Bach's suites, kept, it put a
+        // pair over single notes a fifth more often.
         const keep= INSTR.manyPart&&EV_KEEP? Object.entries(LV.ev).filter(([k])=>{ const [a,b]=k.split("/").map(Number);
-          return (a===n||b===n)&&!recent.includes(a===n? b : a); }) : [];
+          return (a===n||b===n)&&!justPlayed(a===n? b : a); }) : [];
         dropSecond();
         for(const [k,v] of keep) LV.ev[k]=v;
       }
