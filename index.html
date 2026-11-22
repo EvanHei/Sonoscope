@@ -1920,8 +1920,10 @@ nav.tabs button[aria-selected="true"]{background:var(--hov);border-color:var(--l
 [data-theme="light"] nav.tabs button[aria-selected="true"]{box-shadow:0 1px 2px rgba(60,40,20,.18)}
 /* the row of tabs starts where the Record screen's staff box does, on every screen */
 @media (min-width:601px){ header.bar{padding-left:12px} }
-/* the header no taller for the track round the tabs: its padding gives back what the track adds */
-@media (min-width:601px) and (min-height:501px){ header.bar{padding-top:18px;padding-bottom:18px} }
+/* the header no taller for the track round the tabs: its padding gives back what the track adds. The tabs sit
+   midway between the top of the page and the staff box, whose pane starts 14px further down: 7px more over
+   them than under them, the header's height the same */
+@media (min-width:601px) and (min-height:501px){ header.bar{padding-top:25px;padding-bottom:11px} }
 @media (max-width:600px){ header.bar{padding-top:7px;padding-bottom:5px} }
 @media (max-width:600px){ nav.tabs{padding:2px;gap:2px} nav.tabs button{padding:5px 2px} }
 /* the sliding square: the buttons sit over it, clear, and it goes where the choice is */
@@ -13011,6 +13013,8 @@ function ipSide(){
     gEl.classList.toggle("open",open);
     gEl.querySelector(".iprow").setAttribute("aria-expanded",String(open));
     IPL.name= open? G[+gEl.dataset.g].name : null;
+    // opened: the staff and the playhead go to the first time it was played (nothing plays)
+    if(open){ const k=G[+gEl.dataset.g].L[0].k; HL.stop++; pbStop(); IPL.tok++; ST_SCR.manual=false; ipStaffTo(k); rsSelect(k,true); }
     ipColPaint();
   };
   el.querySelectorAll(".iprow").forEach(r=>{
@@ -13030,10 +13034,26 @@ function ipCollapse(){
   IPL.name=null; ipColPaint();
 }
 $("ipCol").onclick=()=>ipCollapse();
+/* Paused, the staff on the screen is the live one (or Analyze's, with the rhythm written out: stRow, from rsSelect):
+   the note picked is brought into its middle, gliding, if it is not in sight already. */
+function ipStaffTo(k){
+  const n=S.notes&&S.notes[k], sb=$("lvStaffBox"), box=$("lvBox");
+  if(!n||!sb||!(LV&&LV.paused)||(box&&box.classList.contains("pzst"))) return;
+  const N=lvDrawn(), m=(n.t0+n.t1)/2;
+  const ln=N.find(x=>m>=x.t0&&m<x.t1)||N.reduce((b,x)=>!b||Math.abs(x.t0-n.t0)<Math.abs(b.t0-n.t0)? x : b,null);
+  const g=ln&&LVS.el.get("n"+ln.key); if(!g) return;
+  const b=sb.getBoundingClientRect(), r=g.getBoundingClientRect();
+  if(r.top>=b.top+8&&r.bottom<=b.bottom-8) return;
+  if(LVS.follow) lvFollow(false);   // off the newest line: as scrolling up by hand
+  LVS.auto=performance.now();
+  sb.scrollTo({top:sb.scrollTop+r.top-b.top-(b.height-r.height)/2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches? "auto" : "smooth"});
+}
 function ipGo(k){
   const n=S.notes&&S.notes[k]; if(!n) return;
   HL.stop++; pbStop();
   IPL.k=k;
+  ST_SCR.manual=false;   // a note picked: the staff goes to it, wherever it was scrolled
+  ipStaffTo(k);
   // from where the lanes are now to the note's start, then it plays and they follow
   const cur=S.notes[S.rk], from= cur? Math.max(PB.at,cur.t1) : PB.at;
   const tok=++IPL.tok, to=n.t0, t0=performance.now();
@@ -13046,7 +13066,8 @@ function ipGo(k){
     const chk=()=>{
       if(tok!==IPL.tok) return;
       if(!PB.on&&!PB.want) return;
-      if(pbPos()>=n.t1){ pbStop(); PB.at=n.t1-0.01; pbPaint(); return; }
+      // played: the playhead back at its start, so play plays it again from there
+      if(pbPos()>=n.t1){ pbStop(); pbSeek(n.t0); pbPaint(); return; }
       setTimeout(chk,25);
     };
     setTimeout(chk,25);
