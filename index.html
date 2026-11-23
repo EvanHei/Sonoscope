@@ -4511,25 +4511,33 @@ function vibrato(resid,fsP,smoothW,winSec){
    Octaves are the honest exception: the upper note's fundamental sits on the
    lower note's second harmonic, far inside one 5.4 Hz bin, so there the two
    tracks are the same measurement written down twice. */
+const PART_LEASH=70;   // cents: how far from its note the partner is followed (trackPartner)
 function trackPartner(nt,x,frames,fft,re,im,hann,aref){
   const N=NFFT_DS, half=N/2, binHz=SR/N;
   const fTgt=aref*Math.pow(2,(nt.second.midi-69)/12);
   // The partner is followed from frame to frame, but never further than a
   // semitone from where it is meant to be. Without that leash a run of
   // sixty-cent steps walks the track off onto a neighbouring harmonic.
-  const loF=fTgt*Math.pow(2,-1.2/12), hiF=fTgt*Math.pow(2,1.2/12);
+  // Kept to PART_LEASH, and the peak looked for only inside it: a note further
+  // off than that is the next note's name, and the note a semitone away still
+  // ringing, louder than the partner, was what the track took instead.
+  // (2026-11-23: thirds and sixths at 240 a minute in a room, read 60-110 cents
+  // off with both notes named right - the pair before ringing on.)
+  const loF=fTgt*Math.pow(2,-PART_LEASH/1200), hiF=fTgt*Math.pow(2,PART_LEASH/1200);
   const mag=new Float64Array(half);
   const cents=[], secDb=[], ownDb=[];
   let expect=clamp(nt.second.f,loF,hiF);
 
   // strongest peak within about 60 cents of f, refined, with the amplitude of
   // the sinusoid under it (a Hann-windowed peak sits at A*N/4)
-  const pick=f=>{
-    const lo=Math.max(1,Math.floor(f*0.965/binHz)), hi=Math.min(half-2,Math.ceil(f*1.035/binHz));
+  const pick=(f,lf,hf)=>{
+    const lo=Math.max(1,Math.floor(Math.max(f*0.965,lf||0)/binHz)), hi=Math.min(half-2,Math.ceil(Math.min(f*1.035,hf||Infinity)/binHz));
     let b=-1,bm=0;
     for(let k=lo;k<=hi;k++) if(mag[k]>bm){ bm=mag[k]; b=k; }
     if(b<1) return null;
     const a=mag[b-1],c0=mag[b],d=mag[b+1],den=a-2*c0+d;
+    // highest at the edge of a leashed search and still rising: the flank of a note outside it, not a peak
+    if(lf&&(a>c0||d>c0)) return null;
     const off= den!==0? clamp(0.5*(a-d)/den,-1,1) : 0;
     return {f:(b+off)*binHz, a:4*bm/N};
   };
@@ -4549,7 +4557,7 @@ function trackPartner(nt,x,frames,fft,re,im,hann,aref){
   for(const j of nt.idx){
     specAt(x,j*HOP+WIN/2,fft,re,im,hann,mag);
 
-    const q=pick(expect);
+    const q=pick(expect,loF,hiF);
     if(q&&q.a>2e-5&&q.f>=loF&&q.f<=hiF){ expect=q.f; cents.push(1200*Math.log2(q.f/fTgt)); }
     else cents.push(NaN);
     secDb.push(dbOf(seriesRms(expect)));
