@@ -4304,6 +4304,7 @@ function measureNotes(notes,midi,frames,x,fft,re,im,hann0){
     }
   });
   if(dsOn&&INSTR.manyPart) octaveLine(notes,x,frames,fft,re,im,hann0);
+  if(dsOn&&INSTR.name==="Cello") tenthLine(notes,x,frames,fft,re,im,hann0);
   if(dsOn&&INSTR.manyPart&&S.takeLive) liveOctaves(notes,S.takeLive,x,frames,fft,re,im,hann0);
   // each note's level as heard, for its dynamic marking (see DYN_ME)
   notes.forEach(nt=>{ nt.dbA=noteDbA(nt,x); noteEnds(nt,x); });
@@ -4451,6 +4452,47 @@ function octaveLine(notes,x,frames,fft,re,im,hann){
               ||B&&sure[q+1]&&B.t0-nt.t1<=0.3&&Math.abs(nt.target-low(B))<=OCT_STEP;
       if(!by) return;
       octSet(nt); sure[q]=true; more=true;
+      trackPartner(nt,x,frames,fft,re,im,hann,S.aref);
+    });
+  }
+}
+
+/* A passage of tenths the same way: a note read as a third between tenths, whose partner an octave over (or under)
+   makes the passage's next tenth, is that tenth when the note there sounds at its fundamental louder than the third's
+   does. A tenth's upper note borrows its octave below every partial but the fundamental, and a room's ring adds the
+   odd ones; a third played has its fundamental. (2026-11-23: tenths at 240 a minute in a room, E3 with G4 read as E3
+   with G3, A2 with C4 as A2 with C3 - the lower fundamental a median 17-40% of the upper one; a third played, Ab2 with
+   C3 beside a tenth, 95%: its own second partial.) Cello only, as tried. */
+const TEN_LINE_N=7, TEN_LINE_R=0.6;   // frames looked at; the median fundamental ratio under which a third is the tenth (tenthLine)
+function tenthLine(notes,x,frames,fft,re,im,hann){
+  const N=NFFT_DS, mag=new Float64Array(N/2);
+  const ten=n=>!!n&&!!n.second&&[15,16].includes(Math.abs(n.second.midi-n.target));
+  const near=(a,b)=>!!a&&!!b&&Math.abs((b.t0>=a.t0? b.t0-a.t1 : a.t0-b.t1))<=0.3;
+  for(let more=true;more;){
+    more=false;
+    notes.forEach((nt,q)=>{
+      if(!nt.second||!nt.idx||!nt.idx.length) return;
+      const iv=nt.second.midi-nt.target;
+      if(![3,4].includes(Math.abs(iv))) return;
+      const nb=[notes[q-1],notes[q+1]].filter(o=>near(nt,o)&&o.second);
+      if(!nb.length||!nb.every(ten)) return;
+      const o= iv>0? nt.second.midi+12 : nt.second.midi-12;
+      if(!playable(Math.min(o,nt.target),Math.max(o,nt.target))) return;
+      // the third's note against the tenth's, fundamental to fundamental, over frames across the note (a median: one
+      // frame alone ranges 0.1-0.75 on a tenth); the tenth's own note has to be heard at all, in its middle
+      const ratios=[], step=Math.max(1,Math.floor(nt.idx.length/TEN_LINE_N));
+      let pNew=null;
+      for(let k=0;k<nt.idx.length;k+=step){
+        const j=nt.idx[k], sp=specAt(x,j*HOP+WIN/2,fft,re,im,hann,mag), pk=specPeaks(sp.mag,sp.binHz,sp.half,sp.mx);
+        const at=m=>{ const g=S.aref*Math.pow(2,(m-69)/12); return nearPeak(pk,g,hTol(1,g,sp.binHz)); };
+        const a=at(o), b=at(nt.second.midi);
+        if(a&&a.a>=sp.mx*PK_HEARD){ ratios.push(b? b.a/a.a : 0); if(!pNew||Math.abs(k-nt.idx.length/2)<step) pNew=a; }
+        else ratios.push(Infinity);
+      }
+      if(!pNew||ratios.length<3||!(median(ratios)<TEN_LINE_R)) return;
+      const m2=69+12*Math.log2(pNew.f/S.aref);
+      nt.second={f:pNew.f,midi:o,name:noteName(o),cents:clamp((m2-o)*100,-50,50)};
+      nt.multi=true; more=true;
       trackPartner(nt,x,frames,fft,re,im,hann,S.aref);
     });
   }
