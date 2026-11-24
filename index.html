@@ -3123,6 +3123,7 @@ const BP_REACH=33;          // semitones over the top string the model's notes m
 // a cello's low notes sound it strongly, and the model's short notes there cut a held note in two in a take of double
 // stops, where nothing puts the rest of it back (2026-11-21: Iowa cello Eb2 and Bb2 read as their 7th partials, C#5 and Ab5)
 const BP_PARTIALS=[12,19,24,28,31,34,36];
+const BP_PHANTOM=0.1, BP_REAL=0.25;   // a fundamental's level against the loudest peak: under the first, no note's; over the second, a note's (bpNotesOf)
 const BP_RESUME=0.25;       // s: a gap in the line this long that a held note of the model's still covers is that note again (double stops)
 function bpLine(ev){
   const L=ev.slice().sort((a,b)=>a.t0-b.t0||b.amp-a.amp), one=[];
@@ -3152,6 +3153,8 @@ function bpLine(ev){
     if(p&&p.midi===n.midi&&n.t0-p.t1<=BP_JOIN) p.t1=Math.max(p.t1,n.t1);
     else out.push({...n});
   }
+  // the other notes the model hears over each, for bpNotesOf
+  for(const n of out) n.tog=[...new Set(L.filter(o=>o.midi!==n.midi&&o.t0<n.t1-BP_TOG&&o.t1>n.t0+BP_TOG).map(o=>o.midi))];
   return out;
 }
 /* The most likely line of notes through the take, frame by frame: each
@@ -3466,7 +3469,29 @@ function bpNotesOf(line,x,midi,voiced,frames,nF){
     const idx=[];
     while(k<nF&&ft(k)<n.t1){ idx.push(k); k++; }
     if(!idx.length) continue;
-    const agree=idx.filter(i=>voiced[i]&&Math.abs(midi[i]-n.midi)<=0.5);
+    let agree=idx.filter(i=>voiced[i]&&Math.abs(midi[i]-n.midi)<=0.5);
+    // In a take of double stops the model can hear the period two notes a third or a sixth apart repeat at - C3 under
+    // E3 and G3 - as a note of its own, the loudest, or one held on from a pair before. Where the tracker, its spectrum
+    // check done, holds through most of the note to another the model also hears there, that one is the line's note.
+    // (2026-11-23: thirds at 240 a minute, E3 with G3 read as C3 with E3)
+    if(dsAna()&&n.tog&&n.tog.length&&agree.length<idx.length*0.3){
+      const cnt={}; for(const i of idx) if(voiced[i]&&isFinite(midi[i])){ const r=Math.round(midi[i]); if(Math.abs(midi[i]-r)<=0.5) cnt[r]=(cnt[r]||0)+1; }
+      const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+      // Only a major third or a fifth over it: the period a third repeats at, two octaves under, is four times a
+      // frequency its notes are five and six times. Anything else is a neighbour ringing on or a partial - on the Bach
+      // suites a step of the melody, the note after, held by the tracker - and the model's note stands.
+      const up= best? +best[0]-n.midi : 0;
+      if(best&&best[1]>=idx.length*0.6&&n.tog.includes(+best[0])&&(up===4||up===7)){
+        // and only with next to nothing on the model's note's own fundamental, where the one tracked sounds clearly:
+        // the period has no fundamental of its own (2-5% of the loudest peak on the test thirds), a note played does
+        // (28-52% for every one of the Bach suites' notes it would otherwise have moved)
+        const mid=idx[idx.length>>1];
+        if(bpFund(x,mid,n.midi)<BP_PHANTOM&&bpFund(x,mid,+best[0])>=BP_REAL){
+          n.midi=+best[0];
+          agree=idx.filter(i=>voiced[i]&&Math.abs(midi[i]-n.midi)<=0.5);
+        }
+      }
+    }
     // where the tracker heard something else, the note's own partials say how high it is
     for(const i of idx){
       if(agree.includes(i)) continue;
@@ -3985,6 +4010,16 @@ function bpPartials(x,i,m0){
     sw+=p; sm+=p*(69+12*Math.log2(f/S.aref));
   }
   return sw>0? sm/sw : m0;
+}
+/* How loud a note's fundamental is in the short spectrum at frame i, against the spectrum's loudest peak: 0 where
+   nothing stands within 40 cents of it. (bpNotesOf: the period a third repeats at has next to none of its own.) */
+function bpFund(x,i,m0){
+  bpPartials(x,i,m0);   // fills BPF.mag for frame i
+  const mag=BPF.mag, bHz=SR/BP_N, f0=S.aref*Math.pow(2,(m0-69)/12);
+  let mx=0; for(let b=1;b<BP_N/2;b++) if(mag[b]>mx) mx=mag[b];
+  const lo=Math.floor(f0*Math.pow(2,-0.4/12)/bHz), hi=Math.ceil(f0*Math.pow(2,0.4/12)/bHz);
+  let bb=lo; for(let b=lo;b<=hi;b++) if(mag[b]>mag[bb]) bb=b;
+  return mx>0&&bb>lo&&bb<hi? mag[bb]/mx : 0;
 }
 /* The note's name is the model's: should the readings put its middle on a
    neighbouring semitone, its cents are taken again from the model's note. */
