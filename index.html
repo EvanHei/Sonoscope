@@ -4424,6 +4424,7 @@ function octBelow(nt){
    single note's even partials lie on its odd ones' curve. (2026-11-21: single notes E4 to B5 read as octaves on the
    bench, cello, violin and viola, all at 0.00-0.42 cents; the octaves found the same way 0.43-3.4, two at 0.1.) */
 const OCT_FLAT_HI=0.4, OCT_SURE=2.5;
+const OCT_LINE_FLAT=1.4, OCT_LINE_OFF=0.2;   // lift, and cents off the odd partials' curve, that carry a flat octave beside another (octaveLine, cello)
 function octFlat(nt){ return nt.target<=OCT_LOW? nt.octOff<OCT_FLAT : nt.octOff<OCT_FLAT_HI&&!(nt.octR>=OCT_SURE); }
 /* A note read as the octave above its own: the partner at the peak found
    at twice its pitch, which the two notes share, so the cents lean toward
@@ -4446,7 +4447,13 @@ function octaveLine(notes,x,frames,fft,re,im,hann){
   for(let more=true;more;){
     more=false;
     notes.forEach((nt,q)=>{
-      if(nt.second||!(nt.octR>=OCT_LINE)||octFlat(nt)) return;
+      // An octave played in tune sits near the odd partials' curve as one string does (octFlat); beside another octave
+      // a lift well over a single note's, and its even partials off that curve at all, are enough. (2026-11-23: in-tune
+      // octave scales at 240 a minute - F3 with F4 lifted 1.6, 0.24 cents off,
+      // read as single notes between octaves found; a single B2 beside one lifts 1.9, but sits on the curve at 0.00.)
+      // Not at E3 and under (OCT_LOW), where single notes lift their even partials most: on the Bach suites B2, D3,
+      // E3, C3 and B-flat2 alone, each beside an octave, went over.
+      if(nt.second||!(nt.octR>=OCT_LINE)||octFlat(nt)&&!(INSTR.name==="Cello"&&nt.target>OCT_LOW&&nt.octR>=OCT_LINE_FLAT&&nt.octOff>=OCT_LINE_OFF)) return;
       const A=notes[q-1], B=notes[q+1];
       const by= A&&sure[q-1]&&nt.t0-A.t1<=0.3&&Math.abs(nt.target-low(A))<=OCT_STEP
               ||B&&sure[q+1]&&B.t0-nt.t1<=0.3&&Math.abs(nt.target-low(B))<=OCT_STEP;
