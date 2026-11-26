@@ -7107,6 +7107,19 @@ function vibShow(sfx,v){
   if(!(Math.abs(p.r-p.sr)<0.08)){ p.sr=Math.round(p.r*10)/10; $("lvVib"+sfx).textContent=p.sr.toFixed(1)+" Hz"; }
   if(!(Math.abs(p.d-p.sd)<0.8)){ p.sd=Math.round(p.d); $("lvDep"+sfx).textContent=p.sd+" ¢"; }
 }
+/* Low power: a phone or tablet (a touch screen and no mouse), or a small machine (four cores or fewer, 4 GB or
+   less). It runs warm with everything at full rate, so the animations that are only decoration are drawn at
+   24-30 frames a second rather than at the screen's rate (120 on many phones), and the trained pitch model reads
+   every other frame at most (?sfev=2 on the bench: the live view as good as every frame; every fourth was not).
+   The live analysis itself - 50 frames a second, every rule tuned to that - is the same everywhere.
+   ?lowpower=1 or 0 in the address forces it either way. */
+const LOWP=(()=>{ try{
+  const q=new URLSearchParams(location.search).get("lowpower"); if(q!==null) return q!=="0";
+  const touch=matchMedia("(pointer: coarse)").matches&&!matchMedia("(any-pointer: fine)").matches;
+  return touch||(navigator.hardwareConcurrency||8)<=4||(navigator.deviceMemory||8)<=4;
+}catch(err){ return false; } })();
+// low power: whether a loop drawing to o may draw now, at fps at most (always, otherwise)
+function fpsCap(o,fps){ if(!LOWP) return true; const now=performance.now(); if(now-(o.fpsT||0)<1000/fps-3) return false; o.fpsT=now; return true; }
 const VIB_EVERY=5;               // frames between live vibrato fits (see liveFrame)
 const LV_HZ=50;                  // fixed analysis rate keeps the vibrato fit honest
 const LV_SPAN=7;                 // seconds visible
@@ -7223,7 +7236,7 @@ async function startLive(seed){
 }
 function liveLoop(){
   if(!LV||LV.paused) return;
-  drawLive();
+  if(fpsCap(LV,30)) drawLive();
   // the staff looked at every 50 ms (it draws only when its notes have changed): a note heard goes down without waiting
   if(!LV.lscT||performance.now()-LV.lscT>LSC_EVERY){ LV.lscT=performance.now(); lscDraw(); }
   LV.raf=requestAnimationFrame(liveLoop);
@@ -7272,6 +7285,7 @@ function pauseLive(){
   if(typeof lvStaffDraw==="function") setTimeout(()=>lvStaffDraw(),0);
   clearInterval(LV.timer); LV.timer=null;
   cancelAnimationFrame(LV.raf); LV.raf=0;
+  sfFeed(false);
   try{ if(LV.mr&&LV.mr.state==="recording") LV.mr.pause(); }catch(err){}
   setPaused(true);
 }
@@ -7281,6 +7295,7 @@ function resumeLive(){
   LV.acPause.push([LV.acP,ac().currentTime]);
   LV.paused=0;
   try{ if(LV.mr&&LV.mr.state==="paused") LV.mr.resume(); }catch(err){}
+  sfFeed(true);
   setPaused(false);
   LV.timer=setInterval(liveFrameRec,1000/LV_HZ);
   LV.raf=requestAnimationFrame(liveLoop);
@@ -7363,6 +7378,7 @@ function idleFx(){
   cv.classList.toggle("on",on);
   if(!on||document.hidden) return;
   const still=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if(!still&&!fpsCap(FX,24)){ FX.raf=requestAnimationFrame(idleFx); return; }
   const {c,w,h}=fit(cv);
   if(c&&w>0){
     const t=performance.now()/1000;
@@ -8261,12 +8277,13 @@ async function sfStart(ctx,src){
     if(!LV) return;
     const node=new AudioWorkletNode(ctx,"sf-tap",{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
     const mc=new MessageChannel();
-    SFW.postMessage({start:{sr:ctx.sampleRate},port:mc.port1},[mc.port1]);
+    SFW.postMessage({start:{sr:ctx.sampleRate,every:LOWP? 2 : 1,gate:LV.sfGate||0},port:mc.port1},[mc.port1]);
     node.port.postMessage({port:mc.port2},[mc.port2]);
     // a node only runs while something downstream pulls on it: a silent one
     const mute=ctx.createGain(); mute.gain.value=0;
     src.connect(node); node.connect(mute); mute.connect(ctx.destination);
     LV.sfNode=node; LV.sfMute=mute;
+    if(LV.paused) sfFeed(false);   // paused while this was being set up (an opened take starts paused)
   }catch(err){ SFW_OK=false; }
 }
 /* A reading of the model: the latest guides the pitch (LV.sfG), and the last
@@ -8278,6 +8295,21 @@ function sfNote(hz,conf,at){
   const H=LV.sfH||(LV.sfH=[]);
   H.push({hz,conf,at});
   while(H.length&&H[0].at<at-LV_SPAN-1) H.shift();
+}
+/* Paused, the model is fed nothing: its readings would only be thrown away
+   (sfNote), and it was the costliest thing running - over a third of a core,
+   which on a phone is most of the heat. The recording pauses too, so on
+   resuming the sound it reads goes on from where it stopped, as before. */
+function sfFeed(on){
+  if(!LV||!LV.sfNode) return;
+  try{ if(on) LV.src.connect(LV.sfNode); else LV.src.disconnect(LV.sfNode); }catch(err){}
+}
+/* The model is told the level under which this view takes no note (half the lower of its two floors), and passes
+   over frames with nothing that loud near them (SF0Stream.quiet): rests and pauses between phrases cost nothing. */
+function sfGate(){
+  const g=0.5*Math.max(LV.peak*Math.min(0.05,LV_CLEAN_LO),2e-4);
+  if(LV.sfGate&&g<=LV.sfGate*1.1) return;
+  LV.sfGate=g; if(SFW) SFW.postMessage({gate:g});
 }
 function sfStop(){
   if(LV&&LV.sfNode){ try{ LV.sfNode.disconnect(); LV.sfMute.disconnect(); }catch(err){} }
@@ -8330,7 +8362,7 @@ function liveFrame(){
   LV.tNow=t;
   if(p.f0>0) p.f0=sfFix(p.f0,t);
   const db=dbOf(p.rms);
-  if(p.rms>LV.peak) LV.peak=p.rms;
+  if(p.rms>LV.peak){ LV.peak=p.rms; sfGate(); }
   // A clean tone counts further down than the rest: high notes are bowed
   // quietly, and a take with a loud open string in it put them under the
   // usual floor, where they broke up or vanished. Noise never reads as clean.
@@ -13100,6 +13132,7 @@ function busyFx(){
   BZFX_RAF=0;
   const up= BZ.on||$("busy").classList.contains("on");
   if(!up) return;
+  if(!fpsCap(busyFx,24)){ BZFX_RAF=requestAnimationFrame(busyFx); return; }
   const cv=$("busyFx"), {c,w,h}=fit(cv);
   if(c&&w>0){
     const still=matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -15406,16 +15439,29 @@ function Stream(K,o={}){
   const M=make(K); this.M=M; this.fmin=o.fmin||60; this.fmax=o.fmax||1600; this.look=o.look??2;
   this.x=new Float32Array(1<<16); this.n=0; this.base=0;   // sound kept, and the sample index its start stands for
   this.cache=new Map(); this.T=0; this.every=o.every||1;
+  // each hop's level (RMS), for passing over frames where there is nothing to hear (gate: RMS, 0 = never)
+  this.gate=o.gate||0; this.hr=new Float32Array(1<<13); this.hn=0;
 }
+/* Nothing in reach of frame t (the sound its every column reads, QUIET_REACH hops either way) at or over the gate:
+   it is given no pitch and confidence 0, without the model being run. The gate is set from the live view's own
+   floor (half of it), so these are frames it would never take a note from. Frames that are read are worked out
+   exactly as before - any columns they need from passed-over frames are worked out then. */
+const QUIET_REACH=24;
+Stream.prototype.quiet=function(t){
+  if(!(this.gate>0)) return false;
+  const h1=Math.min(t+QUIET_REACH,this.hn-1);
+  for(let h=Math.max(0,t-QUIET_REACH);h<=h1;h++) if(this.hr[h&8191]>=this.gate) return false;
+  return true; };
 Stream.prototype.push=function(s){ // more 16 kHz sound; returns the frames now readable as [frame, hz, confidence, frames heard when read]
   if(this.n+s.length>this.x.length){ // drop sound no frame still needs
     const keep=Math.max(0,this.n-8192), y=new Float32Array(Math.max(this.x.length,(this.n-keep+s.length)*2)); y.set(this.x.subarray(keep,this.n)); this.x=y; this.n-=keep; this.base+=keep; }
   this.x.set(s,this.n); this.n+=s.length;
+  for(;(this.hn+1)*HOP<=this.base+this.n;this.hn++){ const k0=this.hn*HOP-this.base; let s2=0; for(let k=k0;k<k0+HOP;k++) s2+=this.x[k]*this.x[k]; this.hr[this.hn&8191]=Math.sqrt(s2/HOP); }
   const out=[]; const T=Math.floor((this.base+this.n)/HOP);
   // read every few frames (o.every), each frame since the last read given its own result
   const ev=this.every||1;
   while(this.T<T){ this.T++; if(this.T%ev) continue;
-    for(let t=Math.max(0,this.done??0);t<=this.T-1-this.look;t++) out.push(this.frame(t,this.T)); this.done=this.T-this.look; }
+    for(let t=Math.max(0,this.done??0);t<=this.T-1-this.look;t++) out.push(this.quiet(t)? [t,0,0,this.T] : this.frame(t,this.T)); this.done=this.T-this.look; }
   return out; };
 // the sound at absolute sample i, silence outside what has come in by frame count T
 Stream.prototype.at=function(i,T){ if(i<0||i>=T*HOP) return 0; const k=i-this.base; return k>=0&&k<this.n? this.x[k] : 0; };
@@ -15451,7 +15497,7 @@ Stream.prototype.frame=function(t,T){
   let hz=0; if(k>=0){ let z=0, s=0; for(let d=-1;d<=1;d++){ const h=k+d, l=h<0||h>94||!(M.fq[h]>=this.fmin&&M.fq[h]<=this.fmax)? -Infinity : lg[h]; const e=Math.exp(l-best); z+=e; s+=e*M.tab[Math.min(94,Math.max(0,h))]; } hz=Math.exp(s/z); }
   const inRange=M.fq[ka]>=this.fmin&&M.fq[ka]<=this.fmax, conf=inRange? 1/(1+Math.exp(-logit)) : 0;
   // forget columns no later frame will read
-  if(t%32===0) for(const key of cache.keys()){ const j=+key.slice(key.indexOf(":")+1); if(j<t-12) cache.delete(key); }
+  if(t-(this.pruned??-1e9)>=32){ this.pruned=t; for(const key of cache.keys()){ const j=+key.slice(key.indexOf(":")+1); if(j<t-12) cache.delete(key); } }
   return [t,hz,conf,T];
 };
 G.SF0Stream=Stream;
@@ -15461,7 +15507,7 @@ G.SF0Stream=Stream;
    to 16 kHz, read by the model, and each reading sent back. It reads every
    frame when the computer has time to, every second or third when it has
    not, and skips ahead rather than fall behind. */
-let K=null, S=null, rs=null, cost=0, lastMs=0;
+let K=null, S=null, rs=null, cost=0, lastMs=0, gate=0, BUDGET=0.4, EVMIN=1;
 function unpack(txt){
   const J=JSON.parse(txt), f32=b=>{ const s=atob(b), u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return new Float32Array(u.buffer); };
   const i32=b=>{ const s=atob(b), u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return new Int32Array(u.buffer); };
@@ -15495,18 +15541,19 @@ onmessage=e=>{
   const m=e.data;
   if(m.model){ K=unpack(m.model); return; }
   // the mic tap talks to the worker directly, over the port that comes with start
-  if(m.start){ rs=resampler(m.start.sr); S=new SF0Stream(K,{look:2,every:1}); cost=0; if(m.port) m.port.onmessage=onmessage; return; }
+  if(m.start){ rs=resampler(m.start.sr); gate=m.start.gate||0; S=new SF0Stream(K,{look:2,every:m.start.every||1,gate}); BUDGET=m.start.budget||0.4; EVMIN=m.start.every||1; cost=0; if(m.port) m.port.onmessage=onmessage; return; }
+  if(m.gate!=null){ gate=m.gate; if(S) S.gate=gate; return; }
   if(m.stop){ S=null; rs=null; return; }
   if(m.pcm&&S){
     const x=rs.push(m.pcm);
     // behind by more than a quarter second: start again from here
     const lag= m.sent? (Date.now()-m.sent)/1000 : m.lag||0;
-    if(lag>0.25){ S=new SF0Stream(K,{look:2,every:S.every}); }
+    if(lag>0.25){ S=new SF0Stream(K,{look:2,every:S.every,gate}); }
     const t0=performance.now(), before=S.T, fr=S.push(x), ms=performance.now()-t0;
     const ups=Math.floor(S.T/S.every)-Math.floor(before/S.every);
     if(ups>0){ const c=ms/ups; cost= cost? 0.9*cost+0.1*c : c;
       // each read kept under 40% of the time it covers
-      S.every=Math.min(4,Math.max(1,Math.ceil(cost/(0.4*16)))); }
+      S.every=Math.min(4,Math.max(EVMIN,Math.ceil(cost/(BUDGET*16)))); }
     if(fr.length) postMessage({f:fr, every:S.every, cost:+cost.toFixed(2)});
   }
 };
